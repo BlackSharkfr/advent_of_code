@@ -98,11 +98,15 @@ mod parsers {
         branch::alt,
         bytes::complete::tag,
         character::complete::{alpha1, u8},
+        combinator::map_res,
         IResult, Parser,
     };
     use nom_supreme::ParserExt;
     fn color(input: &str) -> IResult<&str, Color> {
-        alpha1.parse_from_str().parse(input)
+        // Nom supreme version
+        // alpha1.parse_from_str().parse(input)
+        // Nom classic version
+        map_res(alpha1, Color::from_str)(input)
     }
     fn cubes(input: &str) -> IResult<&str, Cubes> {
         let (input, amount) = u8(input)?;
@@ -118,12 +122,14 @@ mod parsers {
         let (mut input, _) = tag(": ")(input)?;
 
         let mut game = Game::new(id);
-        // let mut reveal = cubes.terminated(alt((tag(", "), tag("; "))).opt());
-        let mut reveal = |str| {
-            let (input, cubes) = cubes(str)?;
-            let (input, _) = alt((tag(", "), tag("; "))).opt().parse(input)?;
-            Ok((input, cubes))
-        };
+        // Nom Supreme version
+        let mut reveal = cubes.terminated(alt((tag(", "), tag("; "))).opt());
+        // Nom classic version
+        // let mut reveal = |str| {
+        //     let (input, cubes) = cubes(str)?;
+        //     let (input, _) = opt(alt((tag(", "), tag("; ")))).parse(input)?;
+        //     Ok((input, cubes))
+        // };
         while let Ok((remain, cubes)) = reveal.parse(input) {
             game.insert_max_cubes(cubes);
             input = remain;
