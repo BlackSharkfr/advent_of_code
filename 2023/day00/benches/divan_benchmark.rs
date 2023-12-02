@@ -1,5 +1,5 @@
 use aoc::Aoc;
-use dayxx::Day;
+use day00::Day;
 use divan::Bencher;
 use std::time::Duration;
 fn main() {

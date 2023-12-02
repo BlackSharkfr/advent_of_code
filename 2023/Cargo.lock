@@ -111,17 +111,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "day01"
-version = "0.1.0"
-dependencies = [
- "aoc",
- "divan",
- "itertools",
- "rayon",
-]
-
-[[package]]
-name = "day02"
+name = "day00"
 version = "0.1.0"
 dependencies = [
  "aoc",
@@ -133,7 +123,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "dayxx"
+name = "day01"
+version = "0.1.0"
+dependencies = [
+ "aoc",
+ "divan",
+ "itertools",
+ "rayon",
+]
+
+[[package]]
+name = "day02"
 version = "0.1.0"
 dependencies = [
  "aoc",

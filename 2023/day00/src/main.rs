@@ -1,5 +1,5 @@
 use aoc::Aoc;
-use dayxx::Day;
+use day00::Day;
 
 fn main() {
     Day::main()
