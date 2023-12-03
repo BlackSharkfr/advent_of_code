@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use aoc::Aoc;
 use itertools::Itertools;
-use rayon::prelude::*;
 
 pub struct Day;
 
@@ -14,7 +13,7 @@ impl Aoc for Day {
     const SAMPLE_PART2: &'static str = include_str!("../inputs/sample2.txt");
 
     fn part1(input: &str) -> u32 {
-        part1_attempt3(&input)
+        part1_attempt3(input)
     }
 
     fn part2(input: &str) -> u32 {
@@ -175,7 +174,7 @@ pub fn part2_attempt1(input: &str) -> u32 {
         // println!("Gear ({x},{y}): {numbers:?}");
 
         if numbers.iter().flatten().count() == 2 {
-            total += numbers.into_iter().flatten().fold(1, |acc, n| acc * n)
+            total += numbers.into_iter().flatten().product::<u32>()
         }
     }
     total
@@ -193,7 +192,7 @@ pub fn part2_attempt2(input: &str) -> u32 {
                 .map(|items| items.0)
                 .dedup();
 
-            (numbers.clone().count() == 2).then_some(numbers.into_iter().fold(1, |acc, n| acc * n))
+            (numbers.clone().count() == 2).then_some(numbers.into_iter().product::<u32>())
         })
         .sum()
 }
@@ -212,12 +211,7 @@ pub fn part2_attempt3(input: &str) -> u32 {
                 .filter_map(|direction| direction.offset(x, y))
                 .filter_map(|(x, y)| get_number(&grid, x, y))
                 .dedup();
-            (numbers.clone().count() == 2).then_some(
-                numbers
-                    .into_iter()
-                    // .map(|(n, ..)| n)
-                    .fold(1, |acc, n| acc * n),
-            )
+            (numbers.clone().count() == 2).then_some(numbers.into_iter().product::<u32>())
         })
         .sum()
 }
@@ -360,12 +354,12 @@ impl From<&str> for Vec2d<char> {
 }
 impl<F, T> From<(&str, F)> for Vec2d<T>
 where
-    F: Fn(char) -> T,
+    F: Fn(char) -> T + Copy,
 {
     fn from((input, f): (&str, F)) -> Self {
         let data = input
             .lines()
-            .map(|line| line.chars().map(|c| f(c)).collect())
+            .map(|line| line.chars().map(f).collect())
             .collect();
         Vec2d { data }
     }
@@ -502,28 +496,27 @@ pub fn part1_pretty(input: &str) -> u32 {
     // Multiple coordinates point to the same index = they are the same number
     let mut number_coords = HashMap::new();
 
-    // Just the important bits
+    // Just the coordinates
     let mut symbols = Vec::new();
 
+    // Let's parse !
     let mut number: u32 = 0;
     let mut id: usize = 0;
     for (y, line) in input.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
-            match c.to_digit(10) {
-                Some(n) => {
-                    number_coords.insert((x as i16, y as i16), id);
-                    number = (number * 10) + n;
-                }
-                None => {
-                    if number != 0 {
-                        numbers.push(std::mem::take(&mut number));
-                        id += 1;
-                    }
-                    // The difference between part1 and part2
-                    if c != '.' {
-                        symbols.push((x as i16, y as i16))
-                    }
-                }
+            if let Some(n) = c.to_digit(10) {
+                number_coords.insert((x as i16, y as i16), id);
+                number = (number * 10) + n;
+                continue;
+            }
+
+            if number != 0 {
+                numbers.push(std::mem::take(&mut number));
+                id += 1;
+            }
+            // The difference between part1 and part2
+            if c != '.' {
+                symbols.push((x as i16, y as i16))
             }
         }
         if number != 0 {
@@ -553,25 +546,23 @@ pub fn part2_pretty(input: &str) -> u32 {
     let mut number_coords = HashMap::new();
     let mut gears = Vec::new();
 
+    // Let's parse !
     let mut number: u32 = 0;
     let mut id: usize = 0;
     for (y, line) in input.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
-            match c.to_digit(10) {
-                Some(n) => {
-                    number_coords.insert((x as i16, y as i16), id);
-                    number = (number * 10) + n;
-                }
-                None => {
-                    if number != 0 {
-                        numbers.push(std::mem::take(&mut number));
-                        id += 1;
-                    }
-                    // The difference between part1 and part2
-                    if c == '*' {
-                        gears.push((x as i16, y as i16))
-                    }
-                }
+            if let Some(n) = c.to_digit(10) {
+                number_coords.insert((x as i16, y as i16), id);
+                number = (number * 10) + n;
+                continue;
+            }
+            if number != 0 {
+                numbers.push(std::mem::take(&mut number));
+                id += 1;
+            }
+            // The difference between part1 and part2
+            if c == '*' {
+                gears.push((x as i16, y as i16))
             }
         }
         if number != 0 {
@@ -595,7 +586,7 @@ pub fn part2_pretty(input: &str) -> u32 {
             if search.clone().count() == 2 {
                 return search
                     .filter_map(|index| numbers.get(index))
-                    .fold(1, |acc, num| acc * num)
+                    .product::<u32>()
                     .into();
             }
             None
