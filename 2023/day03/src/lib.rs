@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use aoc::Aoc;
 use itertools::Itertools;
 
@@ -471,6 +473,112 @@ impl Direction {
             _ => None,
         }
     }
+    fn translate(&self, x: i16, y: i16) -> (i16, i16) {
+        match self {
+            Direction::TopLeft => (x - 1, y - 1),
+            Direction::Top => (x, y - 1),
+            Direction::TopRight => (x + 1, y - 1),
+            Direction::Left => (x - 1, y),
+            Direction::Right => (x + 1, y),
+            Direction::BottomLeft => (x - 1, y + 1),
+            Direction::Bottom => (x, y + 1),
+            Direction::BottomRight => (x + 1, y + 1),
+        }
+    }
+}
+
+pub fn part1_nogrid(input: &str) -> u32 {
+    let mut numbers = Vec::new();
+    let mut number_map = HashMap::new();
+    let mut symbols_coords = Vec::new();
+
+    let mut number = 0;
+    let mut id: usize = 0;
+    for (y, line) in input.lines().enumerate() {
+        for (x, c) in line.chars().enumerate() {
+            match c.to_digit(10) {
+                Some(n) => {
+                    number_map.insert((x as i16, y as i16), id);
+                    number = (number * 10) + n;
+                }
+                None => {
+                    if number != 0 {
+                        numbers.push(std::mem::take(&mut number));
+                        id += 1;
+                    }
+                    if c != '.' {
+                        symbols_coords.push((x as i16, y as i16))
+                    }
+                }
+            }
+        }
+        if number != 0 {
+            numbers.push(std::mem::take(&mut number));
+            id += 1;
+        }
+    }
+    symbols_coords
+        .into_iter()
+        .flat_map(|(x, y)| {
+            Direction::ALL
+                .into_iter()
+                .map(move |dir| dir.translate(x, y))
+                .filter_map(|(x, y)| number_map.get(&(x, y)).cloned())
+                .dedup()
+                .filter_map(|index| numbers.get(index))
+        })
+        .sum()
+}
+
+pub fn part2_nogrid(input: &str) -> u32 {
+    let mut numbers = Vec::new();
+    let mut number_map = HashMap::new();
+    let mut gears_coords = Vec::new();
+
+    let mut number = 0;
+    let mut id: usize = 0;
+    for (y, line) in input.lines().enumerate() {
+        for (x, c) in line.chars().enumerate() {
+            match c.to_digit(10) {
+                Some(n) => {
+                    number_map.insert((x as i16, y as i16), id);
+                    number = (number * 10) + n;
+                }
+                None => {
+                    if number != 0 {
+                        numbers.push(std::mem::take(&mut number));
+                        id += 1;
+                    }
+                    if c == '*' {
+                        gears_coords.push((x as i16, y as i16))
+                    }
+                }
+            }
+        }
+        if number != 0 {
+            numbers.push(std::mem::take(&mut number));
+            id += 1;
+        }
+    }
+
+    gears_coords
+        .into_iter()
+        .flat_map(|(x, y)| {
+            let search = Direction::ALL
+                .iter()
+                .map(|dir| dir.translate(x, y))
+                .filter_map(|(x, y)| number_map.get(&(x, y)).cloned())
+                .dedup();
+
+            if search.clone().count() == 2 {
+                return search
+                    .filter_map(|index| numbers.get(index))
+                    .fold(1, |acc, num| acc * num)
+                    .into();
+            }
+            None
+        })
+        .sum()
 }
 
 #[cfg(test)]
@@ -505,6 +613,15 @@ mod tests {
     }
 
     #[test]
+    fn test_part1_nogrid() {
+        let input = Day::SAMPLE_PART1;
+        assert_eq!(4361, part1_nogrid(input));
+
+        let input = Day::INPUT;
+        assert_eq!(559667, part1_nogrid(input));
+    }
+
+    #[test]
     fn test_part2_1() {
         let input = Day::SAMPLE_PART2;
         assert_eq!(467835, part2_attempt1(input));
@@ -529,5 +646,14 @@ mod tests {
 
         let input = Day::INPUT;
         assert_eq!(86841457, part2_attempt3(input));
+    }
+
+    #[test]
+    fn test_part2_nogrid() {
+        let input = Day::SAMPLE_PART2;
+        assert_eq!(467835, part2_nogrid(input));
+
+        let input = Day::INPUT;
+        assert_eq!(86841457, part2_nogrid(input));
     }
 }
