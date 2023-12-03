@@ -7,7 +7,7 @@ fn main() {
 }
 
 mod part1 {
-    use day03::{part1_attempt1, part1_attempt2, part1_attempt3, part1_nogrid};
+    use day03::{part1_attempt1, part1_attempt2, part1_attempt3, part1_pretty};
 
     use super::*;
     #[divan::bench(min_time = Duration::from_millis(500))]
@@ -30,15 +30,15 @@ mod part1 {
             .bench_values(|input| part1_attempt3(input))
     }
     #[divan::bench(min_time = Duration::from_millis(500))]
-    fn attempt_nogrid(bencher: Bencher) {
+    fn pretty(bencher: Bencher) {
         bencher
             .with_inputs(|| Day::INPUT)
-            .bench_values(|input| part1_nogrid(input))
+            .bench_values(|input| part1_pretty(input))
     }
 }
 
 mod part2 {
-    use day03::{part2_attempt1, part2_attempt2, part2_attempt3, part2_nogrid};
+    use day03::{part2_attempt1, part2_attempt2, part2_attempt3, part2_pretty};
 
     use super::*;
     #[divan::bench(min_time = Duration::from_millis(500))]
@@ -63,9 +63,9 @@ mod part2 {
     }
 
     #[divan::bench(min_time = Duration::from_millis(500))]
-    fn attemtp_nogrid(bencher: Bencher) {
+    fn pretty(bencher: Bencher) {
         bencher
             .with_inputs(|| Day::INPUT)
-            .bench_values(|input| part2_nogrid(input))
+            .bench_values(|input| part2_pretty(input))
     }
 }

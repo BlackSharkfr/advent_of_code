@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use aoc::Aoc;
 use itertools::Itertools;
+use rayon::prelude::*;
 
 pub struct Day;
 
@@ -487,18 +488,30 @@ impl Direction {
     }
 }
 
-pub fn part1_nogrid(input: &str) -> u32 {
+/// Different algorithm : pretty !
+///
+/// Much simpler, less abstractions.
+/// Store numbers and their coordinates separately
+/// Use indirection to find the correct number.
+/// Use the number's index as source of uniqueness for dedup()
+pub fn part1_pretty(input: &str) -> u32 {
+    // Actual numbers are stored here
     let mut numbers = Vec::new();
-    let mut number_map = HashMap::new();
-    let mut symbols_coords = Vec::new();
 
-    let mut number = 0;
+    // Key: Coord of any digit found, Value: the index of the number in the vec above
+    // Multiple coordinates point to the same index = they are the same number
+    let mut number_coords = HashMap::new();
+
+    // Just the important bits
+    let mut symbols = Vec::new();
+
+    let mut number: u32 = 0;
     let mut id: usize = 0;
     for (y, line) in input.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
             match c.to_digit(10) {
                 Some(n) => {
-                    number_map.insert((x as i16, y as i16), id);
+                    number_coords.insert((x as i16, y as i16), id);
                     number = (number * 10) + n;
                 }
                 None => {
@@ -506,8 +519,9 @@ pub fn part1_nogrid(input: &str) -> u32 {
                         numbers.push(std::mem::take(&mut number));
                         id += 1;
                     }
+                    // The difference between part1 and part2
                     if c != '.' {
-                        symbols_coords.push((x as i16, y as i16))
+                        symbols.push((x as i16, y as i16))
                     }
                 }
             }
@@ -517,31 +531,35 @@ pub fn part1_nogrid(input: &str) -> u32 {
             id += 1;
         }
     }
-    symbols_coords
+
+    // And now only search for valid pieces
+    symbols
         .into_iter()
         .flat_map(|(x, y)| {
             Direction::ALL
                 .into_iter()
                 .map(move |dir| dir.translate(x, y))
-                .filter_map(|(x, y)| number_map.get(&(x, y)).cloned())
+                .filter_map(|(x, y)| number_coords.get(&(x, y)).cloned())
+                // This dedup makes sure the numbers are used only once. It prevents multithreading
                 .dedup()
                 .filter_map(|index| numbers.get(index))
         })
         .sum()
 }
 
-pub fn part2_nogrid(input: &str) -> u32 {
+pub fn part2_pretty(input: &str) -> u32 {
+    // Copy from part1
     let mut numbers = Vec::new();
-    let mut number_map = HashMap::new();
-    let mut gears_coords = Vec::new();
+    let mut number_coords = HashMap::new();
+    let mut gears = Vec::new();
 
-    let mut number = 0;
+    let mut number: u32 = 0;
     let mut id: usize = 0;
     for (y, line) in input.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
             match c.to_digit(10) {
                 Some(n) => {
-                    number_map.insert((x as i16, y as i16), id);
+                    number_coords.insert((x as i16, y as i16), id);
                     number = (number * 10) + n;
                 }
                 None => {
@@ -549,8 +567,9 @@ pub fn part2_nogrid(input: &str) -> u32 {
                         numbers.push(std::mem::take(&mut number));
                         id += 1;
                     }
+                    // The difference between part1 and part2
                     if c == '*' {
-                        gears_coords.push((x as i16, y as i16))
+                        gears.push((x as i16, y as i16))
                     }
                 }
             }
@@ -561,15 +580,18 @@ pub fn part2_nogrid(input: &str) -> u32 {
         }
     }
 
-    gears_coords
+    // And now only search for valid gears
+    gears
         .into_iter()
         .flat_map(|(x, y)| {
             let search = Direction::ALL
                 .iter()
                 .map(|dir| dir.translate(x, y))
-                .filter_map(|(x, y)| number_map.get(&(x, y)).cloned())
+                .filter_map(|(x, y)| number_coords.get(&(x, y)).cloned())
+                // This dedup makes sure the numbers are used only once. It prevents multithreading
                 .dedup();
 
+            // The differnece between part1 and part2
             if search.clone().count() == 2 {
                 return search
                     .filter_map(|index| numbers.get(index))
@@ -613,12 +635,12 @@ mod tests {
     }
 
     #[test]
-    fn test_part1_nogrid() {
+    fn test_part1_pretty() {
         let input = Day::SAMPLE_PART1;
-        assert_eq!(4361, part1_nogrid(input));
+        assert_eq!(4361, part1_pretty(input));
 
         let input = Day::INPUT;
-        assert_eq!(559667, part1_nogrid(input));
+        assert_eq!(559667, part1_pretty(input));
     }
 
     #[test]
@@ -649,11 +671,11 @@ mod tests {
     }
 
     #[test]
-    fn test_part2_nogrid() {
+    fn test_part2_pretty() {
         let input = Day::SAMPLE_PART2;
-        assert_eq!(467835, part2_nogrid(input));
+        assert_eq!(467835, part2_pretty(input));
 
         let input = Day::INPUT;
-        assert_eq!(86841457, part2_nogrid(input));
+        assert_eq!(86841457, part2_pretty(input));
     }
 }
