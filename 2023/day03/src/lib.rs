@@ -511,7 +511,8 @@ pub fn part1_pretty(input: &str) -> u32 {
             }
 
             if number != 0 {
-                numbers.push(std::mem::take(&mut number));
+                numbers.push(number);
+                number = 0;
                 id += 1;
             }
             // The difference between part1 and part2
@@ -520,7 +521,8 @@ pub fn part1_pretty(input: &str) -> u32 {
             }
         }
         if number != 0 {
-            numbers.push(std::mem::take(&mut number));
+            numbers.push(number);
+            number = 0;
             id += 1;
         }
     }
@@ -557,7 +559,8 @@ pub fn part2_pretty(input: &str) -> u32 {
                 continue;
             }
             if number != 0 {
-                numbers.push(std::mem::take(&mut number));
+                numbers.push(number);
+                number = 0;
                 id += 1;
             }
             // The difference between part1 and part2
@@ -566,30 +569,33 @@ pub fn part2_pretty(input: &str) -> u32 {
             }
         }
         if number != 0 {
-            numbers.push(std::mem::take(&mut number));
+            numbers.push(number);
+            number = 0;
             id += 1;
         }
     }
 
-    // And now only search for valid gears
+    // And now only search for valid pieces
     gears
         .into_iter()
         .flat_map(|(x, y)| {
-            let search = Direction::ALL
+            let pieces = Direction::ALL
                 .iter()
                 .map(|dir| dir.translate(x, y))
                 .filter_map(|(x, y)| number_coords.get(&(x, y)).cloned())
                 // This dedup makes sure the numbers are used only once. It prevents multithreading
-                .dedup();
+                .dedup()
+                .collect_vec();
 
             // The differnece between part1 and part2
-            if search.clone().count() == 2 {
-                return search
-                    .filter_map(|index| numbers.get(index))
-                    .product::<u32>()
-                    .into();
+            if pieces.len() != 2 {
+                return None;
             }
-            None
+            pieces
+                .into_iter()
+                .filter_map(|index| numbers.get(index))
+                .product::<u32>()
+                .into()
         })
         .sum()
 }
