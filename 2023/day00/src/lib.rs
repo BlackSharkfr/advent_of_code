@@ -4,7 +4,7 @@ pub struct Day;
 
 impl Aoc for Day {
     type OUTPUT = u32;
-    const DAY_NUMBER: u8 = 2;
+    const DAY_NUMBER: u8 = 0;
     const INPUT: &'static str = include_str!("../inputs/input.txt");
     const SAMPLE_PART1: &'static str = include_str!("../inputs/sample1.txt");
     const SAMPLE_PART2: &'static str = include_str!("../inputs/sample2.txt");
