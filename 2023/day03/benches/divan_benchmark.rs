@@ -38,7 +38,9 @@ mod part1 {
 }
 
 mod part2 {
-    use day03::{part2_attempt1, part2_attempt2, part2_attempt3, part2_pretty};
+    use day03::{
+        part2_attempt1, part2_attempt2, part2_attempt3, part2_parser, part2_pretty, part2_search,
+    };
 
     use super::*;
     #[divan::bench(min_time = Duration::from_millis(500))]
@@ -67,5 +69,21 @@ mod part2 {
         bencher
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| part2_pretty(input))
+    }
+
+    #[divan::bench(min_time = Duration::from_millis(500))]
+    fn pretty_parser(bencher: Bencher) {
+        bencher
+            .with_inputs(|| Day::INPUT)
+            .bench_values(|input| part2_parser(input))
+    }
+
+    #[divan::bench(min_time = Duration::from_millis(500))]
+    fn pretty_search(bencher: Bencher) {
+        bencher
+            .with_inputs(|| part2_parser(Day::INPUT))
+            .bench_values(|(numbers, number_coords, gears)| {
+                part2_search(&numbers, &number_coords, &gears)
+            })
     }
 }

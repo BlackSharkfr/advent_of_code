@@ -600,6 +600,72 @@ pub fn part2_pretty(input: &str) -> u32 {
         .sum()
 }
 
+pub fn part2_parser(input: &str) -> (Vec<u32>, HashMap<(i16, i16), usize>, Vec<(i16, i16)>) {
+    // Copy from part1
+    let mut numbers = Vec::new();
+    let mut number_coords = HashMap::new();
+    let mut gears = Vec::new();
+
+    // Let's parse !
+    let mut number: u32 = 0;
+    let mut id: usize = 0;
+    for (y, line) in input.lines().enumerate() {
+        for (x, c) in line.chars().enumerate() {
+            if let Some(n) = c.to_digit(10) {
+                number_coords.insert((x as i16, y as i16), id);
+                number = (number * 10) + n;
+                continue;
+            }
+            if number != 0 {
+                numbers.push(number);
+                number = 0;
+                id += 1;
+            }
+            // The difference between part1 and part2
+            if c == '*' {
+                gears.push((x as i16, y as i16))
+            }
+        }
+        if number != 0 {
+            numbers.push(number);
+            number = 0;
+            id += 1;
+        }
+    }
+
+    (numbers, number_coords, gears)
+}
+
+pub fn part2_search(
+    numbers: &[u32],
+    number_coords: &HashMap<(i16, i16), usize>,
+    gears: &[(i16, i16)],
+) -> u32 {
+    // And now only search for valid pieces
+    gears
+        .iter()
+        .flat_map(|(x, y)| {
+            let pieces = Direction::ALL
+                .iter()
+                .map(|dir| dir.translate(*x, *y))
+                .filter_map(|(x, y)| number_coords.get(&(x, y)).cloned())
+                // This dedup makes sure the numbers are used only once. It prevents multithreading
+                .dedup()
+                .collect_vec();
+
+            // The differnece between part1 and part2
+            if pieces.len() != 2 {
+                return None;
+            }
+            pieces
+                .into_iter()
+                .filter_map(|index| numbers.get(index))
+                .product::<u32>()
+                .into()
+        })
+        .sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
