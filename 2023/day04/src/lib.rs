@@ -103,13 +103,15 @@ mod parsers {
         let mut score = 0;
         while let Ok((remain, number)) = preceded(space1::<&str, ()>, u8)(input) {
             if winners.contains(&number) {
-                match score {
-                    0 => score = 1,
-                    _ => score *= 2,
-                }
+                score += 1
             }
             input = remain
         }
+        let score = match score {
+            0 => 0,
+            1 => 1,
+            _ => 2_u32.pow(score - 1),
+        };
 
         Ok((input, score))
     }
