@@ -9,11 +9,11 @@ impl Aoc for Day {
     const SAMPLE_PART1: &'static str = include_str!("../inputs/sample1.txt");
     const SAMPLE_PART2: &'static str = include_str!("../inputs/sample2.txt");
 
-    fn part1(_input: &str) -> u32 {
+    fn part1(_input: &str) -> Self::OUTPUT {
         todo!()
     }
 
-    fn part2(_input: &str) -> u32 {
+    fn part2(_input: &str) -> Self::OUTPUT {
         todo!()
     }
 }

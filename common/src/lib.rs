@@ -7,7 +7,7 @@ pub trait Aoc {
 
     fn main() {
         let input = Self::INPUT;
-        println!("Day {} :", Self::DAY_NUMBER);
+        println!("Day {:02} :", Self::DAY_NUMBER);
         println!("Part 1 : {}", Self::part1(input));
         println!("Part 2 : {}", Self::part2(input));
     }
