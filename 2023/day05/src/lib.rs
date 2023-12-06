@@ -20,7 +20,7 @@ impl Aoc for Day {
             .into_iter()
             .map(|mut seed| {
                 for range in &ranges {
-                    seed = range.transpose(seed);
+                    seed = range.translate(seed);
                 }
                 seed
             })
@@ -33,66 +33,70 @@ impl Aoc for Day {
             parsers::part2(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
 
         for range_map in range_maps {
-            range_map.transpose_ranges(&mut seed_ranges);
+            range_map.translate_ranges(&mut seed_ranges);
         }
-        seed_ranges.last().unwrap().start
+
+        seed_ranges
+            .into_iter()
+            .map(|range| range.start)
+            .min()
+            .expect("There should be at least one range")
     }
 }
 
-struct CompleteMap(Vec<SingleMap>);
+struct CompleteMap(Vec<Translate>);
 impl CompleteMap {
-    fn transpose(&self, location: u64) -> u64 {
+    fn translate(&self, location: u64) -> u64 {
         self.0
             .iter()
-            .find_map(|transpose| {
-                transpose
+            .find_map(|translate| {
+                translate
                     .origin
                     .contains(&location)
-                    .then(|| transpose.transpose(location))
+                    .then(|| translate.translate(location))
             })
             .unwrap_or(location)
     }
 
-    fn transpose_ranges(&self, ranges: &mut Vec<Range<u64>>) {
-        let mut transposed = Vec::new();
+    fn translate_ranges(&self, ranges: &mut Vec<Range<u64>>) {
+        // Optionnal : Saves a few µs
+        merge_ranges(ranges);
+
+        let mut moved = Vec::new();
         for mapper in &self.0 {
             *ranges = ranges
                 .iter()
                 .flat_map(|range| {
-                    let (destination, remain) = mapper.transpose_range(range);
+                    let (destination, remain) = mapper.translate_range(range);
                     if let Some(dest) = destination {
-                        transposed.push(dest);
+                        moved.push(dest);
                     }
                     remain
                 })
                 .collect();
         }
-        ranges.extend_from_slice(&mut transposed);
-        merge_ranges(ranges);
+        ranges.extend_from_slice(&mut moved);
     }
 }
 
+/// Reduces the amount of ranges. Saves a few µs overall
 fn merge_ranges(ranges: &mut Vec<Range<u64>>) {
-    ranges.par_sort_by_key(|range| range.end);
-
-    let mut out = Vec::<Range<u64>>::new();
-    while let Some(range) = ranges.pop() {
-        match out.last_mut() {
-            Some(last) if range.start >= last.start => (),
-            Some(last) if range.end >= last.start => last.start = range.start,
-            _ => out.push(range),
+    ranges.par_sort_by_key(|range| range.start);
+    for i in (1..ranges.len()).rev() {
+        if ranges[i].start <= ranges[i - 1].end {
+            ranges[i - 1].end = ranges[i - 1].end.max(ranges[i].end);
+            ranges.remove(i);
         }
     }
-    *ranges = out
 }
 
 #[derive(Debug)]
-struct SingleMap {
+struct Translate {
     origin: Range<u64>,
     destination: u64,
 }
-impl SingleMap {
-    fn transpose(&self, location: u64) -> u64 {
+impl Translate {
+    fn translate(&self, location: u64) -> u64 {
         location - self.origin.start + self.destination
     }
 
@@ -100,29 +104,33 @@ impl SingleMap {
         self.destination + (self.origin.end - self.origin.start)
     }
 
-    /// Returns : (Transposed range, Remaining ranges)
+    /// Returns : (Moved range, Remaining ranges)
     ///
-    /// There may not be a transpsoed range
+    /// There may not be a moved range
     /// The remaining range may have been split in two
-    fn transpose_range(&self, range: &Range<u64>) -> (Option<Range<u64>>, Vec<Range<u64>>) {
+    fn translate_range(&self, range: &Range<u64>) -> (Option<Range<u64>>, Vec<Range<u64>>) {
         match (range.start < self.origin.start, self.origin.end < range.end) {
+            // Total overlap : range extends before and after the origin range
             (true, true) => (
                 Some(self.destination..self.destination_end()),
                 vec![range.start..self.origin.start, self.origin.end..range.end],
             ),
-
-            (true, false) if self.origin.start < range.end => (
-                Some(self.destination..self.transpose(range.end)),
-                vec![range.start..self.origin.start],
-            ),
-            (false, true) if range.start < self.origin.end => (
-                Some(self.transpose(range.start)..self.destination_end()),
-                vec![self.origin.end..range.end],
-            ),
+            // Inside : range is completely included within the origin range
             (false, false) => (
-                Some(self.transpose(range.start)..self.transpose(range.end)),
+                Some(self.translate(range.start)..self.translate(range.end)),
                 vec![],
             ),
+            // Partial overlap : range extends before the origin range
+            (true, false) if self.origin.start < range.end => (
+                Some(self.destination..self.translate(range.end)),
+                vec![range.start..self.origin.start],
+            ),
+            // Partial overlap : range extends after the origin range
+            (false, true) if range.start < self.origin.end => (
+                Some(self.translate(range.start)..self.destination_end()),
+                vec![self.origin.end..range.end],
+            ),
+            // Outside : range has no common part with the origin range
             _ => (None, vec![range.clone()]),
         }
     }
@@ -158,7 +166,7 @@ mod parsers {
         .parse(input)
     }
 
-    fn single_map(input: &str) -> IResult<&str, SingleMap> {
+    fn single_map(input: &str) -> IResult<&str, Translate> {
         let (input, destination) = u64(input)?;
         let (input, _) = tag(" ")(input)?;
         let (input, start) = u64(input)?;
@@ -166,7 +174,7 @@ mod parsers {
         let (input, len) = u64(input)?;
 
         let origin = start..start + len;
-        let transpose = SingleMap {
+        let transpose = Translate {
             origin,
             destination,
         };
@@ -185,7 +193,7 @@ mod parsers {
             .parse(input)
     }
 
-    fn all_mappers(input: &str) -> IResult<&str, [CompleteMap; 7]> {
+    fn almanac(input: &str) -> IResult<&str, [CompleteMap; 7]> {
         let (input, m0) = complete_map(input)?;
         let (input, _) = line_ending(input)?;
         let (input, m1) = complete_map(input)?;
@@ -206,7 +214,7 @@ mod parsers {
     pub fn part1(input: &str) -> IResult<&str, (Vec<u64>, [CompleteMap; 7])> {
         let (input, seeds) = seeds(input)?;
         let (input, _) = line_ending(input)?;
-        let (input, ranges) = all_mappers(input)?;
+        let (input, ranges) = almanac(input)?;
 
         Ok((input, (seeds, ranges)))
     }
@@ -214,7 +222,7 @@ mod parsers {
     pub fn part2(input: &str) -> IResult<&str, (Vec<Range<u64>>, [CompleteMap; 7])> {
         let (input, seeds) = seed_ranges(input)?;
         let (input, _) = line_ending(input)?;
-        let (input, ranges) = all_mappers(input)?;
+        let (input, ranges) = almanac(input)?;
 
         Ok((input, (seeds, ranges)))
     }
