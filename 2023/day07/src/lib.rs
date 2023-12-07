@@ -7,7 +7,7 @@ pub struct Day;
 
 impl Aoc for Day {
     type OUTPUT = u32;
-    const DAY_NUMBER: u8 = 0;
+    const DAY_NUMBER: u8 = 7;
     const INPUT: &'static str = include_str!("../inputs/input.txt");
     const SAMPLE_PART1: &'static str = include_str!("../inputs/sample1.txt");
     const SAMPLE_PART2: &'static str = include_str!("../inputs/sample2.txt");
@@ -18,7 +18,7 @@ impl Aoc for Day {
             .map(|line| {
                 let (_, (cards, bid)) = parsers::part1(line)
                     .unwrap_or_else(|e| panic!("Parse failed {e:?} at line {line}"));
-                let score = cards_value_part1(&cards);
+                let score = cards_value_part1(cards);
                 (score, bid)
             })
             .collect::<Vec<_>>();
@@ -38,7 +38,7 @@ impl Aoc for Day {
             .map(|line| {
                 let (_, (cards, bid)) = parsers::part2(line)
                     .unwrap_or_else(|e| panic!("Parse failed {e:?} at line {line}"));
-                let score = cards_value_part2(&cards);
+                let score = cards_value_part2(cards);
                 (score, bid)
             })
             .collect::<Vec<_>>();
@@ -129,7 +129,7 @@ impl FromStr for CardPart2 {
     }
 }
 
-fn cards_value_part1(cards: &[CardPart1; 5]) -> u32 {
+fn cards_value_part1(cards: [CardPart1; 5]) -> u32 {
     cards
         .iter()
         .rev()
@@ -139,7 +139,7 @@ fn cards_value_part1(cards: &[CardPart1; 5]) -> u32 {
         + ((Hand::from(cards) as u32) << (4 * 5))
 }
 
-fn cards_value_part2(cards: &[CardPart2; 5]) -> u32 {
+fn cards_value_part2(cards: [CardPart2; 5]) -> u32 {
     cards
         .iter()
         .rev()
@@ -159,39 +159,35 @@ enum Hand {
     FourOfKind,
     FiveOfKind,
 }
-
-impl From<&[CardPart1; 5]> for Hand {
-    fn from(cards: &[CardPart1; 5]) -> Self {
+impl From<[CardPart1; 5]> for Hand {
+    fn from(cards: [CardPart1; 5]) -> Self {
         let mut counts = [0; 13];
         for card in cards {
-            counts[*card as usize] += 1;
+            counts[card as usize] += 1;
         }
         counts.sort();
-        match (counts[12], counts[11]) {
-            (5, _) => Hand::FiveOfKind,
-            (4, 1) => Hand::FourOfKind,
-            (3, 2) => Hand::FullHouse,
-            (3, 1) => Hand::ThreeOfKind,
-            (2, 2) => Hand::TwoPair,
-            (2, _) => Hand::OnePair,
-            _ => Hand::HighCard,
-        }
+        Hand::from_highest_counts(counts[12], counts[11])
     }
 }
-impl From<&[CardPart2; 5]> for Hand {
-    fn from(cards: &[CardPart2; 5]) -> Self {
+impl From<[CardPart2; 5]> for Hand {
+    fn from(cards: [CardPart2; 5]) -> Self {
         let mut counts = [0; 13];
         for card in cards {
-            counts[*card as usize] += 1;
+            counts[card as usize] += 1;
         }
         let jokers = std::mem::take(&mut counts[0]);
         counts.sort();
         counts[12] += jokers;
-        match (counts[12], counts[11]) {
+        Hand::from_highest_counts(counts[12], counts[11])
+    }
+}
+impl Hand {
+    fn from_highest_counts(highest: u16, second: u16) -> Hand {
+        match (highest, second) {
             (5, _) => Hand::FiveOfKind,
-            (4, 1) => Hand::FourOfKind,
+            (4, _) => Hand::FourOfKind,
             (3, 2) => Hand::FullHouse,
-            (3, 1) => Hand::ThreeOfKind,
+            (3, _) => Hand::ThreeOfKind,
             (2, 2) => Hand::TwoPair,
             (2, _) => Hand::OnePair,
             _ => Hand::HighCard,
