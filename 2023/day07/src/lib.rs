@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use aoc::Aoc;
-use itertools::Itertools;
+use rayon::prelude::*;
 
 pub struct Day;
 
@@ -15,48 +15,32 @@ impl Aoc for Day {
     fn part1(input: &str) -> Self::OUTPUT {
         let (_, mut lines) =
             parsers::part1(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
-        lines.sort_by(|(a, _), (b, _)| compare_part1(a, b));
+
+        lines.par_sort_by_cached_key(|(cards, _)| cards_value_part1(cards));
 
         lines
             .into_iter()
             .enumerate()
-            .map(|(index, (_cards, bid))| {
-                // println!(
-                //     "rank {:>4}, bid {:>4}, hand {:?}, cards {:?}",
-                //     index + 1,
-                //     bid,
-                //     Hand::from_part1(&cards),
-                //     cards
-                // );
-                (index as u32 + 1) * bid
-            })
+            .map(|(index, (_cards, bid))| (index as u32 + 1) * bid)
             .sum()
     }
 
     fn part2(input: &str) -> Self::OUTPUT {
         let (_, mut lines) =
-            parsers::part2(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
-        lines.sort_by(|(a, _), (b, _)| compare_part2(a, b));
+            parsers::part2(input).unwrap_or_else(|e| panic!("Parser Failed {e:?}"));
+
+        lines.par_sort_by_cached_key(|(cards, _)| cards_value_part2(cards));
 
         lines
-            .into_iter()
+            .into_par_iter()
             .enumerate()
-            .map(|(index, (_cards, bid))| {
-                // println!(
-                //     "rank {:>4}, bid {:>4}, hand {:?}, cards {:?}",
-                //     index + 1,
-                //     bid,
-                //     Hand::from_part2(&cards),
-                //     cards
-                // );
-                (index as u32 + 1) * bid
-            })
+            .map(|(index, (_value, bid))| (index as u32 + 1) * bid)
             .sum()
     }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-enum Card {
+enum CardPart1 {
     C2,
     C3,
     C4,
@@ -71,7 +55,7 @@ enum Card {
     King,
     Ace,
 }
-impl FromStr for Card {
+impl FromStr for CardPart1 {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -92,22 +76,39 @@ impl FromStr for Card {
         }
     }
 }
-impl Card {
+impl CardPart1 {
     fn to_part2(&self) -> CardPart2 {
         match self {
-            Card::C2 => CardPart2::C2,
-            Card::C3 => CardPart2::C3,
-            Card::C4 => CardPart2::C4,
-            Card::C5 => CardPart2::C5,
-            Card::C6 => CardPart2::C6,
-            Card::C7 => CardPart2::C7,
-            Card::C8 => CardPart2::C8,
-            Card::C9 => CardPart2::C9,
-            Card::C10 => CardPart2::C10,
-            Card::Jack => CardPart2::Joker,
-            Card::Queen => CardPart2::Queen,
-            Card::King => CardPart2::King,
-            Card::Ace => CardPart2::Ace,
+            CardPart1::C2 => CardPart2::C2,
+            CardPart1::C3 => CardPart2::C3,
+            CardPart1::C4 => CardPart2::C4,
+            CardPart1::C5 => CardPart2::C5,
+            CardPart1::C6 => CardPart2::C6,
+            CardPart1::C7 => CardPart2::C7,
+            CardPart1::C8 => CardPart2::C8,
+            CardPart1::C9 => CardPart2::C9,
+            CardPart1::C10 => CardPart2::C10,
+            CardPart1::Jack => CardPart2::Joker,
+            CardPart1::Queen => CardPart2::Queen,
+            CardPart1::King => CardPart2::King,
+            CardPart1::Ace => CardPart2::Ace,
+        }
+    }
+    fn value(&self) -> u32 {
+        match self {
+            CardPart1::C2 => 0,
+            CardPart1::C3 => 1,
+            CardPart1::C4 => 2,
+            CardPart1::C5 => 3,
+            CardPart1::C6 => 4,
+            CardPart1::C7 => 5,
+            CardPart1::C8 => 6,
+            CardPart1::C9 => 7,
+            CardPart1::C10 => 8,
+            CardPart1::Jack => 9,
+            CardPart1::Queen => 10,
+            CardPart1::King => 11,
+            CardPart1::Ace => 12,
         }
     }
 }
@@ -148,34 +149,44 @@ impl FromStr for CardPart2 {
         }
     }
 }
-
-fn compare_part1(a: &[Card; 5], b: &[Card; 5]) -> std::cmp::Ordering {
-    match Hand::from_part1(a).cmp(&Hand::from_part1(b)) {
-        std::cmp::Ordering::Equal => {
-            for (card_a, card_b) in a.iter().zip(b) {
-                match card_a.cmp(card_b) {
-                    std::cmp::Ordering::Equal => (),
-                    other => return other,
-                }
-            }
-            panic!("Hands are equal : {:?}", a);
+impl CardPart2 {
+    fn value(&self) -> u32 {
+        match self {
+            CardPart2::Joker => 0,
+            CardPart2::C2 => 1,
+            CardPart2::C3 => 2,
+            CardPart2::C4 => 3,
+            CardPart2::C5 => 4,
+            CardPart2::C6 => 5,
+            CardPart2::C7 => 6,
+            CardPart2::C8 => 7,
+            CardPart2::C9 => 8,
+            CardPart2::C10 => 9,
+            CardPart2::Queen => 10,
+            CardPart2::King => 11,
+            CardPart2::Ace => 12,
         }
-        other => other,
     }
 }
-fn compare_part2(a: &[CardPart2; 5], b: &[CardPart2; 5]) -> std::cmp::Ordering {
-    match Hand::from_part2(a).cmp(&Hand::from_part2(b)) {
-        std::cmp::Ordering::Equal => {
-            for (card_a, card_b) in a.iter().zip(b) {
-                match card_a.cmp(&card_b) {
-                    std::cmp::Ordering::Equal => (),
-                    other => return other,
-                }
-            }
-            panic!("Hands are equal : {:?}", a);
-        }
-        other => other,
-    }
+
+fn cards_value_part1(cards: &[CardPart1; 5]) -> u32 {
+    cards
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(i, card)| card.value() << (4 * i))
+        .sum::<u32>()
+        + (Hand::from(cards).value() << (4 * 5))
+}
+
+fn cards_value_part2(cards: &[CardPart2; 5]) -> u32 {
+    cards
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(i, card)| card.value() << (4 * i))
+        .sum::<u32>()
+        + (Hand::from(cards).value() << (4 * 5))
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -190,37 +201,79 @@ enum Hand {
 }
 
 impl Hand {
-    fn from_part1(cards: &[Card; 5]) -> Self {
-        let mut counts = cards.iter().counts().into_values().collect_vec();
+    fn value(&self) -> u32 {
+        match self {
+            Hand::HighCard => 0,
+            Hand::OnePair => 1,
+            Hand::TwoPair => 2,
+            Hand::ThreeOfKind => 3,
+            Hand::FullHouse => 4,
+            Hand::FourOfKind => 5,
+            Hand::FiveOfKind => 6,
+        }
+    }
+}
+impl From<&[CardPart1; 5]> for Hand {
+    fn from(cards: &[CardPart1; 5]) -> Self {
+        let mut cards = cards.clone();
+        cards.sort();
+
+        let mut counts = [1, 0, 0, 0, 0];
+        let mut insert = 0;
+        for i in 0..cards.len() - 1 {
+            if cards[i] == cards[i + 1] {
+                counts[insert] += 1;
+            } else {
+                insert += 1;
+                counts[insert] = 1;
+            }
+        }
         counts.sort();
 
-        match (counts.pop(), counts.pop()) {
-            (Some(5), _) => Hand::FiveOfKind,
-            (Some(4), Some(1)) => Hand::FourOfKind,
-            (Some(3), Some(2)) => Hand::FullHouse,
-            (Some(3), Some(1)) => Hand::ThreeOfKind,
-            (Some(2), Some(2)) => Hand::TwoPair,
-            (Some(2), _) => Hand::OnePair,
+        match (counts[4], counts[3]) {
+            (5, _) => Hand::FiveOfKind,
+            (4, 1) => Hand::FourOfKind,
+            (3, 2) => Hand::FullHouse,
+            (3, 1) => Hand::ThreeOfKind,
+            (2, 2) => Hand::TwoPair,
+            (2, _) => Hand::OnePair,
             _ => Hand::HighCard,
         }
     }
-    fn from_part2(cards: &[CardPart2; 5]) -> Self {
-        let mut bins = cards.iter().counts();
-        let jokers = bins.remove(&CardPart2::Joker);
-        let mut counts = bins.into_values().collect_vec();
-        counts.sort();
-        match (counts.last_mut(), jokers) {
-            (None, _) => return Hand::FiveOfKind,
-            (Some(highest), Some(jokers)) => *highest += jokers,
-            _ => (),
+}
+impl From<&[CardPart2; 5]> for Hand {
+    fn from(cards: &[CardPart2; 5]) -> Self {
+        let mut cards = cards.clone();
+        cards.sort();
+
+        let (mut jokers, mut counts) = if cards[0] == CardPart2::Joker {
+            (1, [0, 0, 0, 0, 0])
+        } else {
+            (0, [1, 0, 0, 0, 0])
+        };
+        let mut insert = 0;
+        for i in 0..cards.len() - 1 {
+            if cards[i] == CardPart2::Joker {
+                jokers += 1;
+                continue;
+            }
+            if cards[i] == cards[i + 1] {
+                counts[insert] += 1;
+            } else {
+                insert += 1;
+                counts[insert] = 1;
+            }
         }
-        match (counts.pop(), counts.pop()) {
-            (Some(5), _) => Hand::FiveOfKind,
-            (Some(4), Some(1)) => Hand::FourOfKind,
-            (Some(3), Some(2)) => Hand::FullHouse,
-            (Some(3), Some(1)) => Hand::ThreeOfKind,
-            (Some(2), Some(2)) => Hand::TwoPair,
-            (Some(2), _) => Hand::OnePair,
+        counts.sort();
+        counts[4] += jokers;
+
+        match (counts[4], counts[3]) {
+            (5, _) => Hand::FiveOfKind,
+            (4, 1) => Hand::FourOfKind,
+            (3, 2) => Hand::FullHouse,
+            (3, 1) => Hand::ThreeOfKind,
+            (2, 2) => Hand::TwoPair,
+            (2, _) => Hand::OnePair,
             _ => Hand::HighCard,
         }
     }
@@ -237,38 +290,39 @@ mod parsers {
 
     use super::*;
 
-    pub fn part1(input: &str) -> IResult<&str, Vec<([Card; 5], u32)>> {
+    pub fn part1(input: &str) -> IResult<&str, Vec<([CardPart1; 5], u32)>> {
         separated_list1(line_ending, line_part1)(input)
     }
+
     pub fn part2(input: &str) -> IResult<&str, Vec<([CardPart2; 5], u32)>> {
         separated_list1(line_ending, line_part2)(input)
     }
 
-    fn line_part1(input: &str) -> IResult<&str, ([Card; 5], u32)> {
+    pub fn line_part1(input: &str) -> IResult<&str, ([CardPart1; 5], u32)> {
         let (input, cards) = five_cards(input)?;
         let (input, _) = space1(input)?;
         let (input, bid) = u32(input)?;
         Ok((input, (cards, bid)))
     }
-    fn line_part2(input: &str) -> IResult<&str, ([CardPart2; 5], u32)> {
+    pub fn line_part2(input: &str) -> IResult<&str, ([CardPart2; 5], u32)> {
         let (input, cards) = five_cards_part2(input)?;
         let (input, _) = space1(input)?;
         let (input, bid) = u32(input)?;
         Ok((input, (cards, bid)))
     }
 
-    fn card(input: &str) -> IResult<&str, Card> {
+    fn card(input: &str) -> IResult<&str, CardPart1> {
         take(1_usize).parse_from_str().parse(input)
     }
 
     fn card_part2(input: &str) -> IResult<&str, CardPart2> {
         take(1_usize)
             .parse_from_str()
-            .map(|card: Card| card.to_part2())
+            .map(|card: CardPart1| card.to_part2())
             .parse(input)
     }
 
-    fn five_cards(input: &str) -> IResult<&str, [Card; 5]> {
+    fn five_cards(input: &str) -> IResult<&str, [CardPart1; 5]> {
         let (input, c0) = card(input)?;
         let (input, c1) = card(input)?;
         let (input, c2) = card(input)?;
