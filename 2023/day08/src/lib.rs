@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use aoc::Aoc;
 
@@ -62,6 +62,24 @@ pub fn part2_hash_str_singlethread(input: &str) -> u64 {
         .expect("There should be at least one start_id -> loop length")
 }
 
+/// For Bench comparison : nodes stored in BTreeMap of &str (single threaded)
+pub fn part2_btree_str_singlethread(input: &str) -> u64 {
+    let (_, (directions, nodes)) =
+        parsers::part1_btree_str(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+    let start_ids = nodes
+        .keys()
+        .filter(|id| id.ends_with('A'))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    start_ids
+        .into_iter()
+        .map(|id| loop_length_btree_str(id, &directions, &nodes))
+        .reduce(lcm)
+        .expect("There should be at least one start_id -> loop length")
+}
+
 /// For Bench comparison : nodes stored in Hashmap of &str (single threaded)
 pub fn part2_hash_string_singlethread(input: &str) -> u64 {
     let (_, (directions, nodes)) =
@@ -89,6 +107,24 @@ pub fn part2_hash_str(input: &str) -> u64 {
     start_ids
         .into_par_iter()
         .map(|id| loop_length_str(id, &directions, &nodes))
+        .reduce_with(lcm)
+        .expect("There should be at least one start_id -> loop length")
+}
+
+/// For Bench comparison : nodes stored in BTreeMap of &str (multithreaded with rayon)
+pub fn part2_btree_str(input: &str) -> u64 {
+    let (_, (directions, nodes)) =
+        parsers::part1_btree_str(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+    let start_ids = nodes
+        .keys()
+        .filter(|id| id.ends_with('A'))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    start_ids
+        .into_par_iter()
+        .map(|id| loop_length_btree_str(id, &directions, &nodes))
         .reduce_with(lcm)
         .expect("There should be at least one start_id -> loop length")
 }
@@ -146,6 +182,25 @@ fn loop_length_str(
     start_id: &str,
     directions: &[Direction],
     nodes: &HashMap<&str, [&str; 2]>,
+) -> u64 {
+    let mut id = start_id;
+    let mut directions = directions.iter().cycle().enumerate();
+    while let (Some((step, direction)), Some(choice)) = (directions.next(), nodes.get(id)) {
+        id = match direction {
+            Direction::Left => choice[0],
+            Direction::Right => choice[1],
+        };
+        if id.ends_with('Z') {
+            return step as u64 + 1;
+        }
+    }
+    unreachable!("Loop should return directly");
+}
+
+fn loop_length_btree_str(
+    start_id: &str,
+    directions: &[Direction],
+    nodes: &BTreeMap<&str, [&str; 2]>,
 ) -> u64 {
     let mut id = start_id;
     let mut directions = directions.iter().cycle().enumerate();
@@ -231,6 +286,7 @@ mod parsers {
 
     type HashMapString = HashMap<String, [String; 2]>;
     type HashMapStr<'a> = HashMap<&'a str, [&'a str; 2]>;
+    type BTreeMapStr<'a> = BTreeMap<&'a str, [&'a str; 2]>;
 
     pub fn part1(input: &str) -> IResult<&str, (Vec<Direction>, HashMapString)> {
         let (input, directions) = many1(direction)(input)?;
@@ -255,6 +311,23 @@ mod parsers {
         let (input, _) = line_ending(input)?;
 
         let mut nodes = HashMap::new();
+        let mut input = input;
+        while !input.is_empty() {
+            let (remain, (id, directions)) = node_str(input)?;
+            nodes.insert(id, directions);
+            let (remain, _) = line_ending(remain)?;
+            input = remain;
+        }
+
+        Ok((input, (directions, nodes)))
+    }
+
+    pub fn part1_btree_str(input: &str) -> IResult<&str, (Vec<Direction>, BTreeMapStr)> {
+        let (input, directions) = many1(direction)(input)?;
+        let (input, _) = line_ending(input)?;
+        let (input, _) = line_ending(input)?;
+
+        let mut nodes = BTreeMap::new();
         let mut input = input;
         while !input.is_empty() {
             let (remain, (id, directions)) = node_str(input)?;
@@ -296,6 +369,12 @@ mod tests {
     fn test_part2_hash_str() {
         let input = Day::INPUT;
         assert_eq!(15746133679061, part2_hash_str(input))
+    }
+
+    #[test]
+    fn test_part2_btree_str() {
+        let input = Day::INPUT;
+        assert_eq!(15746133679061, part2_btree_str(input))
     }
 
     #[test]

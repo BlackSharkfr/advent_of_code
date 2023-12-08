@@ -20,33 +20,49 @@ mod part1 {
 }
 
 mod part2 {
-    use day08::{part2_hash_str, part2_hash_str_singlethread, part2_hash_string_singlethread};
+    use day08::{
+        part2_btree_str, part2_btree_str_singlethread, part2_hash_str, part2_hash_str_singlethread,
+        part2_hash_string_singlethread,
+    };
 
     use super::*;
     #[divan::bench]
-    fn hashmap_string(bencher: Bencher) {
+    fn rayon_hashmap_string(bencher: Bencher) {
         bencher
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| Day::part2(input))
     }
 
     #[divan::bench]
-    fn hashmap_str(bencher: Bencher) {
+    fn rayon_hashmap_str(bencher: Bencher) {
         bencher
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| part2_hash_str(input))
     }
 
     #[divan::bench]
-    fn hashmap_str_singlethread(bencher: Bencher) {
+    fn hashmap_str(bencher: Bencher) {
         bencher
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| part2_hash_str_singlethread(input))
     }
     #[divan::bench]
-    fn hashmap_string_singlethread(bencher: Bencher) {
+    fn hashmap_string(bencher: Bencher) {
         bencher
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| part2_hash_string_singlethread(input))
+    }
+
+    #[divan::bench]
+    fn rayon_btreemap_str(bencher: Bencher) {
+        bencher
+            .with_inputs(|| Day::INPUT)
+            .bench_values(|input| part2_btree_str(input))
+    }
+    #[divan::bench]
+    fn btreemap_str(bencher: Bencher) {
+        bencher
+            .with_inputs(|| Day::INPUT)
+            .bench_values(|input| part2_btree_str_singlethread(input))
     }
 }
