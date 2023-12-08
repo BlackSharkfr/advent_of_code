@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 use aoc::Aoc;
@@ -40,45 +41,86 @@ impl Aoc for Day {
             .keys()
             .filter_map(|id| id.ends_with('A').then_some(id.as_str()))
             .collect::<Vec<_>>();
-
         start_ids
-            .into_iter()
+            .into_par_iter()
             .map(|id| loop_length(id, &directions, &nodes))
-            .reduce(lcm)
+            .reduce_with(lcm)
             .expect("There should be at least one start_id -> loop length")
     }
 }
 
-/// Try me for fun...
-#[allow(dead_code)]
-fn brute_force(directions: &[Direction], nodes: &HashMap<String, [String; 2]>) -> u64 {
-    let mut directions = directions.iter().cycle();
-    let mut current_id = nodes
-        .keys()
-        .filter_map(|id| id.ends_with('A').then_some(id.as_str()))
-        .collect::<Vec<_>>();
-    println!("Starting ids: {}\n{current_id:?}", current_id.len());
-    let mut steps = 0;
-    while let Some(direction) = directions.next() {
-        steps += 1;
+/// For Bench comparison : nodes stored in Hashmap of &str (single threaded)
+pub fn part2_hash_str_singlethread(input: &str) -> u64 {
+    let (_, (directions, nodes)) =
+        parsers::part1_str(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
 
-        for i in 0..current_id.len() {
-            let id = &mut current_id[i];
+    nodes
+        .keys()
+        .filter(|id| id.ends_with('A'))
+        .map(|start_id| loop_length_str(start_id, &directions, &nodes))
+        .reduce(lcm)
+        .expect("There should be at least one start_id -> loop length")
+}
+
+/// For Bench comparison : nodes stored in Hashmap of &str (single threaded)
+pub fn part2_hash_string_singlethread(input: &str) -> u64 {
+    let (_, (directions, nodes)) =
+        parsers::part1(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+    nodes
+        .keys()
+        .filter(|id| id.ends_with('A'))
+        .map(|start_id| loop_length(start_id, &directions, &nodes))
+        .reduce(lcm)
+        .expect("There should be at least one start_id -> loop length")
+}
+
+/// For Bench comparison : nodes stored in Hashmap of &str (multithreaded with rayon)
+pub fn part2_hash_str(input: &str) -> u64 {
+    let (_, (directions, nodes)) =
+        parsers::part1_str(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+    let start_ids = nodes
+        .keys()
+        .filter(|id| id.ends_with('A'))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    start_ids
+        .into_par_iter()
+        .map(|id| loop_length_str(id, &directions, &nodes))
+        .reduce_with(lcm)
+        .expect("There should be at least one start_id -> loop length")
+}
+
+/// Please don't try me...
+#[allow(dead_code)]
+pub fn part2_brute_force(input: &str) -> u64 {
+    let (_, (directions, nodes)) =
+        parsers::part1_str(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+    let mut ids = nodes
+        .keys()
+        .filter_map(|id| id.ends_with('A').then_some(*id))
+        .collect::<Vec<_>>();
+    println!("Starting ids: {}\n{ids:?}", ids.len());
+
+    for (step, direction) in directions.iter().cycle().enumerate() {
+        for id in &mut ids {
             let choice = nodes.get(*id).unwrap();
             *id = match direction {
-                Direction::Left => choice[0].as_str(),
-                Direction::Right => choice[1].as_str(),
+                Direction::Left => choice[0],
+                Direction::Right => choice[1],
             };
         }
-        if current_id.iter().all(|id| id.ends_with('Z')) {
-            break;
+        if ids.iter().all(|id| id.ends_with('Z')) {
+            return step as u64 + 1;
         }
-        if steps % 1_000_000 == 0 {
-            println!("Step {} Million, ids: {current_id:?}", steps / 1_000_000);
+        if step % 1_000_000 == 0 {
+            println!("Step {} Million, ids: {ids:?}", step / 1_000_000);
         }
     }
-
-    steps
+    unreachable!("Loop should return directly");
 }
 
 fn loop_length(
@@ -86,21 +128,37 @@ fn loop_length(
     directions: &[Direction],
     nodes: &HashMap<String, [String; 2]>,
 ) -> u64 {
-    let mut directions = directions.iter().cycle();
-    let mut current_id = start_id;
-    let mut steps = 0;
-    while let (Some(direction), Some(choice)) = (directions.next(), nodes.get(current_id)) {
-        steps += 1;
-        current_id = match direction {
+    let mut id = start_id;
+    let mut directions = directions.iter().cycle().enumerate();
+    while let (Some((step, direction)), Some(choice)) = (directions.next(), nodes.get(id)) {
+        id = match direction {
             Direction::Left => choice[0].as_str(),
             Direction::Right => choice[1].as_str(),
         };
-        if current_id.ends_with('Z') {
-            break;
+        if id.ends_with('Z') {
+            return step as u64 + 1;
         }
     }
+    unreachable!("Loop should return directly");
+}
 
-    steps
+fn loop_length_str(
+    start_id: &str,
+    directions: &[Direction],
+    nodes: &HashMap<&str, [&str; 2]>,
+) -> u64 {
+    let mut id = start_id;
+    let mut directions = directions.iter().cycle().enumerate();
+    while let (Some((step, direction)), Some(choice)) = (directions.next(), nodes.get(id)) {
+        id = match direction {
+            Direction::Left => choice[0],
+            Direction::Right => choice[1],
+        };
+        if id.ends_with('Z') {
+            return step as u64 + 1;
+        }
+    }
+    unreachable!("Loop should return directly");
 }
 
 fn lcm(a: u64, b: u64) -> u64 {
@@ -115,7 +173,7 @@ fn gcd(a: u64, b: u64) -> u64 {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum Direction {
+pub enum Direction {
     Left,
     Right,
 }
@@ -157,8 +215,21 @@ mod parsers {
 
         Ok((input, (id.into(), [left.into(), right.into()])))
     }
+    fn node_str(input: &str) -> IResult<&str, (&str, [&str; 2])> {
+        let (input, id) = alpha1(input)?;
+        let (input, _) = tag(" = (")(input)?;
+        let (input, left) = alpha1(input)?;
+        let (input, _) = tag(", ")(input)?;
+        let (input, right) = alpha1(input)?;
+        let (input, _) = tag(")")(input)?;
 
-    pub fn part1(input: &str) -> IResult<&str, (Vec<Direction>, HashMap<String, [String; 2]>)> {
+        Ok((input, (id, [left, right])))
+    }
+
+    type HashMapString = HashMap<String, [String; 2]>;
+    type HashMapStr<'a> = HashMap<&'a str, [&'a str; 2]>;
+
+    pub fn part1(input: &str) -> IResult<&str, (Vec<Direction>, HashMapString)> {
         let (input, directions) = many1(direction)(input)?;
         let (input, _) = line_ending(input)?;
         let (input, _) = line_ending(input)?;
@@ -167,6 +238,23 @@ mod parsers {
         let mut input = input;
         while !input.is_empty() {
             let (remain, (id, directions)) = node(input)?;
+            nodes.insert(id, directions);
+            let (remain, _) = line_ending(remain)?;
+            input = remain;
+        }
+
+        Ok((input, (directions, nodes)))
+    }
+
+    pub fn part1_str(input: &str) -> IResult<&str, (Vec<Direction>, HashMapStr)> {
+        let (input, directions) = many1(direction)(input)?;
+        let (input, _) = line_ending(input)?;
+        let (input, _) = line_ending(input)?;
+
+        let mut nodes = HashMap::new();
+        let mut input = input;
+        while !input.is_empty() {
+            let (remain, (id, directions)) = node_str(input)?;
             nodes.insert(id, directions);
             let (remain, _) = line_ending(remain)?;
             input = remain;
@@ -191,7 +279,25 @@ mod tests {
     }
 
     #[test]
+    fn test_part2_brute() {
+        let input = Day::SAMPLE_PART2;
+        assert_eq!(6, part2_brute_force(input));
+    }
+
+    #[test]
     fn test_part2() {
         Day::test_part2(6)
+    }
+
+    #[test]
+    fn test_part2_hash_str() {
+        let input = Day::INPUT;
+        assert_eq!(15746133679061, part2_hash_str(input))
+    }
+
+    #[test]
+    fn test_part2_single() {
+        let input = Day::INPUT;
+        assert_eq!(15746133679061, part2_hash_str_singlethread(input))
     }
 }
