@@ -165,11 +165,14 @@ fn lcm(a: u64, b: u64) -> u64 {
     (a / gcd(a, b)) * b
 }
 
-fn gcd(a: u64, b: u64) -> u64 {
-    match a % b {
-        0 => b,
-        c => gcd(b, c),
+/// Euclid division method [https://en.wikipedia.org/wiki/Euclidean_algorithm#Implementations]
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
     }
+    a
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
