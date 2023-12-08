@@ -129,6 +129,30 @@ pub fn part2_btree_str(input: &str) -> u64 {
         .expect("There should be at least one start_id -> loop length")
 }
 
+/// For Bench comparison : nodes stored in an array of u16 (multithreaded with rayon)
+pub fn part2_encoded(input: &str) -> u64 {
+    let (_, (directions, start_ids, nodes)) =
+        parsers::part2_array(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+    start_ids
+        .into_par_iter()
+        .map(|id| loop_length_encoded(id, &directions, &nodes))
+        .reduce_with(lcm)
+        .expect("There should be at least one start_id -> loop length")
+}
+
+/// For Bench comparison : nodes stored in an array of u16 (singlethreaded)
+pub fn part2_encoded_singlethreaded(input: &str) -> u64 {
+    let (_, (directions, start_ids, nodes)) =
+        parsers::part2_array(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+    start_ids
+        .into_iter()
+        .map(|id| loop_length_encoded(id, &directions, &nodes))
+        .reduce(lcm)
+        .expect("There should be at least one start_id -> loop length")
+}
+
 /// Please don't try me...
 #[allow(dead_code)]
 pub fn part2_brute_force(input: &str) -> u64 {
@@ -216,6 +240,22 @@ fn loop_length_btree_str(
     unreachable!("Loop should return directly");
 }
 
+fn loop_length_encoded(start_id: u16, directions: &[Direction], nodes: &[[u16; 2]; 32767]) -> u64 {
+    let mut id = start_id;
+    let mut directions = directions.iter().cycle().enumerate();
+    while let (Some((step, direction)), Some(choice)) = (directions.next(), nodes.get(id as usize))
+    {
+        id = match direction {
+            Direction::Left => choice[0],
+            Direction::Right => choice[1],
+        };
+        if id == start_id && step != 0 {
+            return step as u64 + 1;
+        }
+    }
+    unreachable!("Loop should return directly");
+}
+
 fn lcm(a: u64, b: u64) -> u64 {
     (a / gcd(a, b)) * b
 }
@@ -228,6 +268,13 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
         a = t;
     }
     a
+}
+
+fn encode(str: &str) -> u16 {
+    let c0 = ((str.as_bytes()[0] - b'A') as u16) << 10;
+    let c1 = ((str.as_bytes()[1] - b'A') as u16) << 5;
+    let c2 = (str.as_bytes()[2] - b'A') as u16;
+    c0 | c1 | c2
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -338,6 +385,30 @@ mod parsers {
 
         Ok((input, (directions, nodes)))
     }
+
+    pub fn part2_array(
+        input: &str,
+    ) -> IResult<&str, (Vec<Direction>, Vec<u16>, [[u16; 2]; 32767])> {
+        let (input, directions) = many1(direction)(input)?;
+        let (input, _) = line_ending(input)?;
+        let (input, _) = line_ending(input)?;
+
+        let mut nodes = [[0_u16; 2]; 32767];
+        let mut starts = Vec::new();
+        let mut input = input;
+        while !input.is_empty() {
+            let (remain, (id, directions)) = node_str(input)?;
+            let index = encode(id);
+            if id.ends_with('Z') {
+                starts.push(index);
+            }
+            nodes[index as usize] = [encode(directions[0]), encode(directions[1])];
+            let (remain, _) = line_ending(remain)?;
+            input = remain
+        }
+
+        Ok((input, (directions, starts, nodes)))
+    }
 }
 
 #[cfg(test)]
@@ -381,5 +452,14 @@ mod tests {
     fn test_part2_single() {
         let input = Day::INPUT;
         assert_eq!(15746133679061, part2_hash_str_singlethread(input))
+    }
+
+    #[test]
+    fn test_part2_encoded() {
+        let input = Day::SAMPLE_PART2;
+        assert_eq!(6, part2_encoded(input));
+
+        let input = Day::INPUT;
+        assert_eq!(15746133679061, part2_encoded(input))
     }
 }

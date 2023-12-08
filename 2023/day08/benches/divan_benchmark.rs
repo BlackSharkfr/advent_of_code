@@ -21,8 +21,8 @@ mod part1 {
 
 mod part2 {
     use day08::{
-        part2_btree_str, part2_btree_str_singlethread, part2_hash_str, part2_hash_str_singlethread,
-        part2_hash_string_singlethread,
+        part2_btree_str, part2_btree_str_singlethread, part2_encoded, part2_encoded_singlethreaded,
+        part2_hash_str, part2_hash_str_singlethread, part2_hash_string_singlethread,
     };
 
     use super::*;
@@ -64,5 +64,18 @@ mod part2 {
         bencher
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| part2_btree_str_singlethread(input))
+    }
+
+    #[divan::bench]
+    fn array_encoded(bencher: Bencher) {
+        bencher
+            .with_inputs(|| Day::INPUT)
+            .bench_values(|input| part2_encoded_singlethreaded(input))
+    }
+    #[divan::bench]
+    fn rayon_array_encoded(bencher: Bencher) {
+        bencher
+            .with_inputs(|| Day::INPUT)
+            .bench_values(|input| part2_encoded(input))
     }
 }
