@@ -26,9 +26,10 @@ impl Aoc for Day {
         input
             .par_lines()
             .map(|line| {
-                let (_, values) = parsers::values(line)
+                let (_, mut values) = parsers::values(line)
                     .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
-                predict_previous(&values)
+                values.reverse();
+                predict_next(&values)
             })
             .sum()
     }
@@ -44,18 +45,6 @@ fn predict_next(values: &[i32]) -> i32 {
         false => values.last().map(|n| *n + predict_next(&differences)),
     }
     .expect("Failed to predict next number : recursion reached an empty series")
-}
-
-fn predict_previous(values: &[i32]) -> i32 {
-    let differences = values
-        .windows(2)
-        .map(|numbers| numbers[1] - numbers[0])
-        .collect_vec();
-    match differences.iter().all(|number| *number == 0) {
-        true => values.first().cloned(),
-        false => values.first().map(|n| *n - predict_previous(&differences)),
-    }
-    .expect("Failed to predict previous number : recursion reached an empty series")
 }
 
 mod parsers {
