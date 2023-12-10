@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use aoc::Aoc;
 use rayon::prelude::*;
+use std::collections::HashMap;
 
 pub struct Day;
 
@@ -14,148 +13,100 @@ impl Aoc for Day {
 
     fn part1(input: &str) -> Self::OUTPUT {
         let map = parsers::part1_hashmap(input);
-
-        let start = find_start(&map).expect("Map should contain a start");
-        for mut direction in Direction::ALL {
-            let mut coords = start;
-            let mut count = 0;
-            loop {
-                coords = direction.next_coords(coords);
-                let Some(pipe) = map.get(&coords) else {
-                    break;
-                };
-                count += 1;
-                if *pipe == Pipe::Start {
-                    return count / 2;
-                }
-                let Some(next) = direction.next(pipe) else {
-                    break;
-                };
-                direction = next;
-            }
-        }
-        panic!("Searched all 4 directions without looping to the start")
+        let start = find_start(&map).expect("Starting location not found");
+        let pipes = find_pipe_loop(start, &map);
+        pipes.len() as u32 / 2
     }
 
     fn part2(input: &str) -> Self::OUTPUT {
         let map = parsers::part1_hashmap(input);
 
-        let polygon = find_polygon(&map);
+        let start = find_start(&map).expect("Starting location not found");
+        let pipes = find_pipe_loop(start, &map);
+        let (min_x, max_x, min_y, max_y) = min_max_coords(&pipes);
 
-        let (min_x, max_x, min_y, max_y) = min_max_coords(&polygon);
+        // Genericise the solution for any starting location along the pipe
+        let replacement = start_replacement(start, pipes[1], pipes[pipes.len() - 1]);
+
+        let mut pipes_map = HashMap::with_capacity(pipes.len());
+        pipes_map.insert(start, replacement);
+        for coords in &pipes[1..pipes.len()] {
+            if let Some(pipe) = map.get(coords).cloned() {
+                pipes_map.insert(*coords, pipe);
+            }
+        }
+
         (min_y + 1..max_y)
-            .flat_map(|y| (min_x + 1..max_x).map(move |x| (x, y)))
-            .par_bridge()
-            .filter(|(x, y)| {
-                !is_on_edge((*x, *y), &polygon) && winding_number((*x, *y), &polygon) != 0
+            .map(|y| {
+                let mut inside = false;
+                let mut count = 0;
+                for x in min_x..max_x {
+                    match pipes_map.get(&(x, y)) {
+                        // Both solutions work thanks to the Genericisation above
+                        // Some(Pipe::BottomLeft) | Some(Pipe::BottomRight) | Some(Pipe::Vertical) => {
+                        Some(Pipe::TopLeft) | Some(Pipe::TopRight) | Some(Pipe::Vertical) => {
+                            inside = !inside
+                        }
+                        None if inside => count += 1,
+                        _ => (),
+                    }
+                }
+                count
             })
-            .count() as u32
+            .sum()
     }
 }
 
 fn find_start(map: &HashMap<Coords, Pipe>) -> Option<Coords> {
-    map.par_iter()
-        .find_map_any(|(coords, pipe)| (*pipe == Pipe::Start).then_some(*coords))
+    map.iter()
+        .find_map(|(coords, pipe)| (*pipe == Pipe::Start).then_some(*coords))
 }
 
-/// implementation of Dan Sunday's Point in Polygon using Winding number algorithm
-fn winding_number((x, y): Coords, polygon: &[Coords]) -> i32 {
-    let mut wn = 0;
-    for edge in polygon.windows(2) {
-        let (x1, y1) = (edge[0].0, edge[0].1);
-        let (x2, y2) = (edge[1].0, edge[1].1);
-        if y1 <= y {
-            // start y <= point.y
-            if y2 > y {
-                // upwards crossing
-                let offset = left_of_edge((x, y), (x1, y1), (x2, y2));
-                if offset > 0 {
-                    // Point left of edge
-                    wn += 1;
-                }
-            }
-        } else {
-            // start y > point.y
-            if y2 <= y {
-                // downwards crossing
-                let offset = left_of_edge((x, y), (x1, y1), (x2, y2));
-                if offset < 0 {
-                    // Point right of edge
-                    wn -= 1
-                }
-            }
-        }
-    }
-
-    wn
-}
-
-fn left_of_edge((x, y): Coords, (x1, y1): Coords, (x2, y2): Coords) -> i32 {
-    (x2 - x1) * (y - y1) - (x - x1) * (y2 - y1)
-}
-
-fn is_on_edge((x, y): Coords, polygon: &[Coords]) -> bool {
-    for edge in polygon.windows(2) {
-        let (x1, y1) = (edge[0].0, edge[0].1);
-        let (x2, y2) = (edge[1].0, edge[1].1);
-        if x == x1 && x == x2 {
-            let ymin = y1.min(y2);
-            let ymax = y1.max(y2);
-            if ymin <= y && y <= ymax {
-                return true;
-            }
-            continue;
-        }
-        if y == y1 && y == y2 {
-            let xmin = x1.min(x2);
-            let xmax = x1.max(x2);
-            if xmin <= x && x <= xmax {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Find the Pipes and descibe it as a closed polygon
-fn find_polygon(map: &HashMap<(i32, i32), Pipe>) -> Vec<(i32, i32)> {
-    let start = find_start(map).expect("Map should contain a start");
-
+fn find_pipe_loop(start: Coords, map: &HashMap<Coords, Pipe>) -> Vec<Coords> {
     for mut direction in Direction::ALL {
-        let mut polygon = vec![start];
         let mut coords = start;
+        let mut pipes = vec![start];
         loop {
             coords = direction.next_coords(coords);
             let Some(pipe) = map.get(&coords) else {
                 break;
             };
-            match pipe {
-                Pipe::BottomLeft | Pipe::BottomRight | Pipe::TopLeft | Pipe::TopRight => {
-                    polygon.push(coords)
-                }
-                Pipe::Start => {
-                    polygon.push(coords);
-                    return polygon;
-                }
-                _ => (),
+            if *pipe == Pipe::Start {
+                return pipes;
             }
-
-            let Some(next) = direction.next(pipe) else {
+            pipes.push(coords);
+            let Some(next) = direction.next_direction(pipe) else {
                 break;
             };
             direction = next;
         }
     }
-    panic!("Searched all 4 directions without looping to the start")
+    panic!("Searched all directions but did not find the loop")
+}
+
+fn start_replacement(start: Coords, mut a: Coords, mut b: Coords) -> Pipe {
+    a.0 -= start.0;
+    a.1 -= start.1;
+    b.0 -= start.0;
+    b.1 -= start.1;
+    match (a, b) {
+        ((1, 0), (-1, 0)) | ((-1, 0), (1, 0)) => Pipe::Horizontal,
+        ((0, 1), (0, -1)) | ((0, -1), (0, 1)) => Pipe::Vertical,
+        ((-1, 0), (0, -1)) | ((0, -1), (-1, 0)) => Pipe::BottomRight,
+        ((0, -1), (1, 0)) | ((1, 0), (0, -1)) => Pipe::BottomLeft,
+        ((0, 1), (1, 0)) | ((1, 0), (0, 1)) => Pipe::TopLeft,
+        ((0, 1), (-1, 0)) | ((-1, 0), (0, 1)) => Pipe::TopRight,
+        _ => panic!("Invalid input coordinates"),
+    }
 }
 
 /// Returns (min X, max X, min Y, max Y)
-fn min_max_coords(path: &[Coords]) -> (i32, i32, i32, i32) {
+fn min_max_coords(coords: &[Coords]) -> (i32, i32, i32, i32) {
     let mut min_x = i32::MAX;
     let mut min_y = i32::MAX;
     let mut max_x = i32::MIN;
     let mut max_y = i32::MIN;
-    for (x, y) in path {
+    for (x, y) in coords {
         min_x = min_x.min(*x);
         max_x = max_x.max(*x);
         min_y = min_y.min(*y);
@@ -176,6 +127,7 @@ enum Direction {
 impl Direction {
     const ALL: [Self; 4] = [Self::Up, Self::Down, Self::Left, Self::Right];
 
+    /// Move one step forwards
     fn next_coords(&self, (x, y): Coords) -> Coords {
         match self {
             Direction::Up => (x, y - 1),
@@ -185,24 +137,27 @@ impl Direction {
         }
     }
 
-    fn next(self, pipe: &Pipe) -> Option<Direction> {
-        match (pipe, self) {
-            (Pipe::Vertical, _) => Some(self),
-            (Pipe::Horizontal, _) => Some(self),
-            (Pipe::TopLeft, Direction::Up) => Some(Direction::Right),
-            (Pipe::TopLeft, Direction::Left) => Some(Direction::Down),
-            (Pipe::TopRight, Direction::Up) => Some(Direction::Left),
-            (Pipe::TopRight, Direction::Right) => Some(Direction::Down),
-            (Pipe::BottomLeft, Direction::Down) => Some(Direction::Right),
-            (Pipe::BottomLeft, Direction::Left) => Some(Direction::Up),
-            (Pipe::BottomRight, Direction::Down) => Some(Direction::Left),
-            (Pipe::BottomRight, Direction::Right) => Some(Direction::Up),
+    /// Change direction based on pipe shape
+    ///
+    /// returns `None` if the pipe is entered from a wrong direction (genericise solution)
+    fn next_direction(self, pipe: &Pipe) -> Option<Direction> {
+        match (self, pipe) {
+            (_, Pipe::Vertical) => Some(self),
+            (_, Pipe::Horizontal) => Some(self),
+            (Direction::Up, Pipe::TopLeft) => Some(Direction::Right),
+            (Direction::Left, Pipe::TopLeft) => Some(Direction::Down),
+            (Direction::Up, Pipe::TopRight) => Some(Direction::Left),
+            (Direction::Right, Pipe::TopRight) => Some(Direction::Down),
+            (Direction::Down, Pipe::BottomLeft) => Some(Direction::Right),
+            (Direction::Left, Pipe::BottomLeft) => Some(Direction::Up),
+            (Direction::Down, Pipe::BottomRight) => Some(Direction::Left),
+            (Direction::Right, Pipe::BottomRight) => Some(Direction::Up),
             _ => None,
         }
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 enum Pipe {
     Vertical,
     Horizontal,
@@ -211,19 +166,6 @@ enum Pipe {
     BottomLeft,
     BottomRight,
     Start,
-}
-impl Pipe {
-    fn to_char(&self) -> char {
-        match self {
-            Pipe::Vertical => '│',
-            Pipe::Horizontal => '─',
-            Pipe::TopLeft => '┌',
-            Pipe::TopRight => '┐',
-            Pipe::BottomLeft => '└',
-            Pipe::BottomRight => '┘',
-            Pipe::Start => 'S',
-        }
-    }
 }
 impl TryFrom<char> for Pipe {
     type Error = ();
@@ -237,6 +179,20 @@ impl TryFrom<char> for Pipe {
             '7' => Ok(Self::TopRight),
             'S' => Ok(Self::Start),
             _ => Err(()),
+        }
+    }
+}
+impl Pipe {
+    /// For debugging
+    fn to_char(self) -> char {
+        match self {
+            Pipe::Vertical => '│',
+            Pipe::Horizontal => '─',
+            Pipe::TopLeft => '┌',
+            Pipe::TopRight => '┐',
+            Pipe::BottomLeft => '└',
+            Pipe::BottomRight => '┘',
+            Pipe::Start => 'S',
         }
     }
 }
@@ -256,7 +212,8 @@ mod parsers {
         input
             .lines()
             .enumerate()
-            .flat_map(|(y, line)| {
+            .par_bridge()
+            .flat_map_iter(|(y, line)| {
                 line.char_indices().flat_map(move |(x, c)| {
                     Pipe::try_from(c)
                         .ok()
