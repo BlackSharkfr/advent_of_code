@@ -12,27 +12,23 @@ impl Aoc for Day {
 
     fn part1(input: &str) -> Self::OUTPUT {
         let mut coords = parsers::part1(input);
-
         expand_universe(&mut coords, 1);
-
-        coords
-            .iter()
-            .tuple_combinations()
-            .map(|(a, b)| manhattan_distance(*a, *b))
-            .sum()
+        sum_distances(&coords)
     }
 
     fn part2(input: &str) -> Self::OUTPUT {
         let mut coords = parsers::part1(input);
-
         expand_universe(&mut coords, 1_000_000 - 1);
-
-        coords
-            .iter()
-            .tuple_combinations()
-            .map(|(a, b)| manhattan_distance(*a, *b))
-            .sum()
+        sum_distances(&coords)
     }
+}
+
+fn sum_distances(coords: &[Coords]) -> usize {
+    coords
+        .iter()
+        .tuple_combinations()
+        .map(|(a, b)| manhattan_distance(*a, *b))
+        .sum()
 }
 
 fn expand_universe(coords: &mut [Coords], expanse_ratio: usize) {
