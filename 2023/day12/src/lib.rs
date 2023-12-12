@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use aoc::Aoc;
 use itertools::Itertools;
@@ -17,9 +17,10 @@ impl Aoc for Day {
         input
             .par_lines()
             .map(|line| {
-                let (_, data) = parsers::part1(line)
+                let (_, (springs, pattern)) = parsers::part1(line)
                     .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
-                permutations(data)
+                // brute_force_permutations(data)
+                cached_permutations(&springs, &pattern, 0, &mut HashMap::new())
             })
             .sum()
     }
@@ -37,14 +38,16 @@ impl Aoc for Day {
                 }
 
                 let pattern = (0..5).flat_map(|_| data.1.iter().cloned()).collect_vec();
-                permutations((springs, pattern))
+                // brute_force_permutations((springs, pattern))
+                cached_permutations(&springs, &pattern, 0, &mut HashMap::new())
             })
             .sum()
     }
 }
 
-fn permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
-    // println!("Initial springs : {springs:?}, pattern : {pattern:?}");
+#[allow(dead_code)]
+/// Works for Part1, but Part2 takes forever !
+fn brute_force_permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
     let mut count = 0;
     let mut arrangements = VecDeque::from([springs]);
     while let Some(mut springs) = arrangements.pop_front() {
@@ -53,7 +56,7 @@ fn permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
         for spring_index in 0..springs.len() {
             if springs[spring_index] == Spring::Unknown {
                 let mut copy = springs.clone();
-                copy[spring_index] = Spring::Operational;
+                copy[spring_index] = Spring::Working;
                 arrangements.push_front(copy);
                 springs[spring_index] = Spring::Broken;
             }
@@ -66,7 +69,7 @@ fn permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
                     break;
                 }
             }
-            if springs[spring_index] == Spring::Operational && broken_count != 0 {
+            if springs[spring_index] == Spring::Working && broken_count != 0 {
                 if broken_count != pattern[broken_index] {
                     break;
                 }
@@ -81,19 +84,79 @@ fn permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
             }
             broken_index += 1;
         }
-
         if broken_index != pattern.len() {
             continue;
         }
         count += 1
     }
-    // println!("Count: {count}");
     count
+}
+
+type Cache<'a> = (usize, usize, u8);
+
+/// Computes permutations recursively and stores intermediate values in a cache.
+fn cached_permutations(
+    springs: &[Spring],
+    pattern: &[u8],
+    count: u8,
+    cache: &mut HashMap<Cache, usize>,
+) -> usize {
+    if let Some(cached) = cache.get(&(springs.len(), pattern.len(), count)) {
+        return *cached;
+    }
+
+    let permutations = match springs.first() {
+        Some(Spring::Working) => case_working(springs, pattern, count, cache),
+        Some(Spring::Broken) => case_broken(springs, pattern, count, cache),
+        Some(Spring::Unknown) => {
+            case_working(springs, pattern, count, cache)
+                + case_broken(springs, pattern, count, cache)
+        }
+        // Finished the last spring with a Spring::Working
+        None if pattern.is_empty() => 1,
+        // Finished the last spring with a Spring::Broken
+        None if pattern == &[count] => 1,
+        // Finished the last spring, but the pattern was not followed
+        None => 0,
+    };
+
+    cache.insert((springs.len(), pattern.len(), count), permutations);
+    permutations
+}
+
+fn case_broken(
+    springs: &[Spring],
+    pattern: &[u8],
+    count: u8,
+    cache: &mut HashMap<Cache, usize>,
+) -> usize {
+    let Some(max_count) = pattern.first() else {
+        return 0;
+    };
+    if *max_count <= count {
+        return 0;
+    }
+    cached_permutations(&springs[1..], pattern, count + 1, cache)
+}
+
+fn case_working(
+    springs: &[Spring],
+    pattern: &[u8],
+    count: u8,
+    cache: &mut HashMap<Cache, usize>,
+) -> usize {
+    if count == 0 {
+        return cached_permutations(&springs[1..], pattern, 0, cache);
+    }
+    if pattern.first() != Some(&count) {
+        return 0;
+    }
+    cached_permutations(&springs[1..], &pattern[1..], 0, cache)
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Spring {
-    Operational,
+    Working,
     Broken,
     Unknown,
 }
@@ -103,7 +166,7 @@ impl TryFrom<char> for Spring {
         match c {
             '?' => Ok(Spring::Unknown),
             '#' => Ok(Spring::Broken),
-            '.' => Ok(Spring::Operational),
+            '.' => Ok(Spring::Working),
             _ => Err(()),
         }
     }
@@ -137,11 +200,47 @@ mod tests {
 
     #[test]
     fn test_part1() {
+        let input = "???.### 1,1,3";
+        assert_eq!(1, Day::part1(input), "1: {input}");
+
+        let input = ".??..??...?##. 1,1,3";
+        assert_eq!(4, Day::part1(input), "2: {input}");
+
+        let input = "?#?#?#?#?#?#?#? 1,3,1,6";
+        assert_eq!(1, Day::part1(input), "3: {input}");
+
+        let input = "????.#...#... 4,1,1";
+        assert_eq!(1, Day::part1(input), "4: {input}");
+
+        let input = "????.######..#####. 1,6,5";
+        assert_eq!(4, Day::part1(input), "5: {input}");
+
+        let input = "?###???????? 3,2,1";
+        assert_eq!(10, Day::part1(input), "6: {input}");
+
         Day::test_part1(21)
     }
 
     #[test]
     fn test_part2() {
+        let input = "???.### 1,1,3";
+        assert_eq!(1, Day::part2(input), "1: {input}");
+
+        let input = ".??..??...?##. 1,1,3";
+        assert_eq!(16384, Day::part2(input), "2: {input}");
+
+        let input = "?#?#?#?#?#?#?#? 1,3,1,6";
+        assert_eq!(1, Day::part2(input), "3: {input}");
+
+        let input = "????.#...#... 4,1,1";
+        assert_eq!(16, Day::part2(input), "4: {input}");
+
+        let input = "????.######..#####. 1,6,5";
+        assert_eq!(2500, Day::part2(input), "5: {input}");
+
+        let input = "?###???????? 3,2,1";
+        assert_eq!(506250, Day::part2(input), "6: {input}");
+
         Day::test_part2(525152)
     }
 }
