@@ -8,7 +8,7 @@ pub struct Day;
 
 impl Aoc for Day {
     type OUTPUT = usize;
-    const DAY_NUMBER: u8 = 0;
+    const DAY_NUMBER: u8 = 12;
     const INPUT: &'static str = include_str!("../inputs/input.txt");
     const SAMPLE_PART1: &'static str = include_str!("../inputs/sample1.txt");
     const SAMPLE_PART2: &'static str = include_str!("../inputs/sample2.txt");
@@ -19,7 +19,6 @@ impl Aoc for Day {
             .map(|line| {
                 let (_, (springs, pattern)) = parsers::part1(line)
                     .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
-                // brute_force_permutations(data)
                 cached_permutations(&springs, &pattern, 0, &mut HashMap::new())
             })
             .sum()
@@ -45,9 +44,21 @@ impl Aoc for Day {
     }
 }
 
+/// For benching purposes
+pub fn part1_brute_force(input: &str) -> usize {
+    input
+        .par_lines()
+        .map(|line| {
+            let (_, (springs, pattern)) = parsers::part1(line)
+                .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
+            brute_force_permutations(springs, &pattern)
+        })
+        .sum()
+}
+
 #[allow(dead_code)]
 /// Works for Part1, but Part2 takes forever !
-fn brute_force_permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
+fn brute_force_permutations(springs: Vec<Spring>, pattern: &[u8]) -> usize {
     let mut count = 0;
     let mut arrangements = VecDeque::from([springs]);
     while let Some(mut springs) = arrangements.pop_front() {
@@ -120,9 +131,11 @@ fn cached_permutations(springs: &[Spring], pattern: &[u8], count: u8, cache: &mu
 }
 
 fn case_broken(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
+    // Broken springs outside of allowed pattern
     let Some(max_count) = pattern.first() else {
         return 0;
     };
+    // More broken springs than allowed in the pattern
     if *max_count <= count {
         return 0;
     }
@@ -130,13 +143,15 @@ fn case_broken(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache)
 }
 
 fn case_working(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
+    // First working spring after `count` broken ones
+    if pattern.first() == Some(&count) {
+        return cached_permutations(&springs[1..], &pattern[1..], 0, cache);
+    }
+    // Multiple working springs in a row, or working springs at the start
     if count == 0 {
         return cached_permutations(&springs[1..], pattern, 0, cache);
     }
-    if pattern.first() != Some(&count) {
-        return 0;
-    }
-    cached_permutations(&springs[1..], &pattern[1..], 0, cache)
+    return 0;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -204,6 +219,30 @@ mod tests {
         assert_eq!(10, Day::part1(input), "6: {input}");
 
         Day::test_part1(21)
+    }
+
+    #[test]
+    fn test_part1_brute_force() {
+        let input = "???.### 1,1,3";
+        assert_eq!(1, part1_brute_force(input), "1: {input}");
+
+        let input = ".??..??...?##. 1,1,3";
+        assert_eq!(4, part1_brute_force(input), "2: {input}");
+
+        let input = "?#?#?#?#?#?#?#? 1,3,1,6";
+        assert_eq!(1, part1_brute_force(input), "3: {input}");
+
+        let input = "????.#...#... 4,1,1";
+        assert_eq!(1, part1_brute_force(input), "4: {input}");
+
+        let input = "????.######..#####. 1,6,5";
+        assert_eq!(4, part1_brute_force(input), "5: {input}");
+
+        let input = "?###???????? 3,2,1";
+        assert_eq!(10, part1_brute_force(input), "6: {input}");
+
+        let input = Day::SAMPLE_PART1;
+        assert_eq!(21, part1_brute_force(input));
     }
 
     #[test]
