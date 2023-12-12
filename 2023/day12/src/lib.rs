@@ -15,7 +15,7 @@ impl Aoc for Day {
 
     fn part1(input: &str) -> Self::OUTPUT {
         input
-            .lines()
+            .par_lines()
             .map(|line| {
                 let (_, data) = parsers::part1(line)
                     .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
@@ -24,18 +24,32 @@ impl Aoc for Day {
             .sum()
     }
 
-    fn part2(_input: &str) -> Self::OUTPUT {
-        todo!()
+    fn part2(input: &str) -> Self::OUTPUT {
+        input
+            .par_lines()
+            .map(|line| {
+                let (_, data) = parsers::part1(line)
+                    .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
+                let mut springs = data.0.clone();
+                for _ in 0..4 {
+                    springs.push(Spring::Unknown);
+                    springs.extend_from_slice(&data.0);
+                }
+
+                let pattern = (0..5).flat_map(|_| data.1.iter().cloned()).collect_vec();
+                permutations((springs, pattern))
+            })
+            .sum()
     }
 }
 
 fn permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
-    // println!("Springs: {springs:?}, pattern {pattern:?}");
+    // println!("Initial springs : {springs:?}, pattern : {pattern:?}");
     let mut count = 0;
     let mut arrangements = VecDeque::from([springs]);
     while let Some(mut springs) = arrangements.pop_front() {
         let mut broken_count = 0;
-        let mut broken = Vec::new();
+        let mut broken_index = 0;
         for spring_index in 0..springs.len() {
             match springs[spring_index] {
                 Spring::Unknown => {
@@ -52,19 +66,28 @@ fn permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
                     if broken_count == 0 {
                         continue;
                     }
-                    broken.push(broken_count);
+                    if broken_index == pattern.len() || broken_count != pattern[broken_index] {
+                        break;
+                    }
+                    broken_index += 1;
                     broken_count = 0;
                 }
             }
         }
+
         if broken_count != 0 {
-            broken.push(broken_count);
+            if broken_index == pattern.len() || broken_count != pattern[broken_index] {
+                continue;
+            }
+            broken_index += 1;
         }
-        if broken == pattern {
-            // println!("Found valid arrangement : {springs:?}");
-            count += 1
+
+        if broken_index != pattern.len() {
+            continue;
         }
+        count += 1
     }
+    // println!("Count: {count}");
     count
 }
 
