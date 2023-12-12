@@ -29,16 +29,16 @@ impl Aoc for Day {
         input
             .par_lines()
             .map(|line| {
-                let (_, data) = parsers::part1(line)
+                let (_, (springs, pattern)) = parsers::part1(line)
                     .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
-                let mut springs = data.0.clone();
-                for _ in 0..4 {
-                    springs.push(Spring::Unknown);
-                    springs.extend_from_slice(&data.0);
-                }
 
-                let pattern = (0..5).flat_map(|_| data.1.iter().cloned()).collect_vec();
-                // brute_force_permutations((springs, pattern))
+                let springs = std::iter::repeat(springs).take(5);
+                let springs = Itertools::intersperse(springs, vec![Spring::Unknown])
+                    .flatten()
+                    .collect_vec();
+
+                let pattern = std::iter::repeat(pattern).take(5).flatten().collect_vec();
+
                 cached_permutations(&springs, &pattern, 0, &mut HashMap::new())
             })
             .sum()
@@ -92,15 +92,10 @@ fn brute_force_permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize
     count
 }
 
-type Cache<'a> = (usize, usize, u8);
+type Cache = HashMap<(usize, usize, u8), usize>;
 
 /// Computes permutations recursively and stores intermediate values in a cache.
-fn cached_permutations(
-    springs: &[Spring],
-    pattern: &[u8],
-    count: u8,
-    cache: &mut HashMap<Cache, usize>,
-) -> usize {
+fn cached_permutations(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
     if let Some(cached) = cache.get(&(springs.len(), pattern.len(), count)) {
         return *cached;
     }
@@ -115,7 +110,7 @@ fn cached_permutations(
         // Finished the last spring with a Spring::Working
         None if pattern.is_empty() => 1,
         // Finished the last spring with a Spring::Broken
-        None if pattern == &[count] => 1,
+        None if pattern == [count] => 1,
         // Finished the last spring, but the pattern was not followed
         None => 0,
     };
@@ -124,12 +119,7 @@ fn cached_permutations(
     permutations
 }
 
-fn case_broken(
-    springs: &[Spring],
-    pattern: &[u8],
-    count: u8,
-    cache: &mut HashMap<Cache, usize>,
-) -> usize {
+fn case_broken(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
     let Some(max_count) = pattern.first() else {
         return 0;
     };
@@ -139,12 +129,7 @@ fn case_broken(
     cached_permutations(&springs[1..], pattern, count + 1, cache)
 }
 
-fn case_working(
-    springs: &[Spring],
-    pattern: &[u8],
-    count: u8,
-    cache: &mut HashMap<Cache, usize>,
-) -> usize {
+fn case_working(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
     if count == 0 {
         return cached_permutations(&springs[1..], pattern, 0, cache);
     }
