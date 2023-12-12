@@ -24,7 +24,7 @@ mod part2 {
     #[divan::bench]
     fn main(bencher: Bencher) {
         bencher
-            .with_inputs(|| Day::INPUT)
+            .with_inputs(|| Day::SAMPLE_PART2)
             .bench_values(|input| Day::part2(input))
     }
 }

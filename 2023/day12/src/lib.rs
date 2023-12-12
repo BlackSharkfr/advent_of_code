@@ -51,27 +51,27 @@ fn permutations((springs, pattern): (Vec<Spring>, Vec<u8>)) -> usize {
         let mut broken_count = 0;
         let mut broken_index = 0;
         for spring_index in 0..springs.len() {
-            match springs[spring_index] {
-                Spring::Unknown => {
-                    let mut copy = springs.clone();
-                    copy[spring_index] = Spring::Operational;
-                    arrangements.push_back(copy);
-                    springs[spring_index] = Spring::Broken;
-                    broken_count += 1;
+            if springs[spring_index] == Spring::Unknown {
+                let mut copy = springs.clone();
+                copy[spring_index] = Spring::Operational;
+                arrangements.push_front(copy);
+                springs[spring_index] = Spring::Broken;
+            }
+            if springs[spring_index] == Spring::Broken {
+                broken_count += 1;
+                if broken_index == pattern.len() {
+                    break;
                 }
-                Spring::Broken => {
-                    broken_count += 1;
+                if broken_count > pattern[broken_index] {
+                    break;
                 }
-                Spring::Operational => {
-                    if broken_count == 0 {
-                        continue;
-                    }
-                    if broken_index == pattern.len() || broken_count != pattern[broken_index] {
-                        break;
-                    }
-                    broken_index += 1;
-                    broken_count = 0;
+            }
+            if springs[spring_index] == Spring::Operational && broken_count != 0 {
+                if broken_count != pattern[broken_index] {
+                    break;
                 }
+                broken_index += 1;
+                broken_count = 0;
             }
         }
 
