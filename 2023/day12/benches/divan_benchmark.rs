@@ -10,7 +10,7 @@ fn main() {
 }
 
 mod part1 {
-    use day12::{part1_brute_force, part1_mutual_cache};
+    use day12::part1_brute_force;
 
     use super::*;
 
@@ -22,13 +22,6 @@ mod part1 {
     }
 
     #[divan::bench]
-    fn mutual_cached(bencher: Bencher) {
-        bencher
-            .with_inputs(|| Day::INPUT)
-            .bench_values(|input| part1_mutual_cache(input))
-    }
-
-    #[divan::bench]
     fn brute_force(bencher: Bencher) {
         bencher
             .with_inputs(|| Day::INPUT)
@@ -37,7 +30,6 @@ mod part1 {
 }
 
 mod part2 {
-    use day12::part2_mutual_cache;
 
     use super::*;
     #[divan::bench]
@@ -45,12 +37,5 @@ mod part2 {
         bencher
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| Day::part2(input))
-    }
-
-    #[divan::bench]
-    fn mutual_cached(bencher: Bencher) {
-        bencher
-            .with_inputs(|| Day::INPUT)
-            .bench_values(|input| part2_mutual_cache(input))
     }
 }

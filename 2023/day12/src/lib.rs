@@ -56,42 +56,6 @@ pub fn part1_brute_force(input: &str) -> usize {
         .sum()
 }
 
-/// For benching purposes
-pub fn part1_mutual_cache(input: &str) -> usize {
-    let mut cache = HashMap::new();
-    input
-        .lines()
-        .map({
-            move |line| {
-                let (_, (springs, pattern)) = parsers::part1(line)
-                    .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
-                mutual_cached::permutations(&springs, &pattern, 0, &mut cache)
-            }
-        })
-        .sum()
-}
-
-/// For benching purposes
-pub fn part2_mutual_cache(input: &str) -> usize {
-    let mut cache = HashMap::new();
-    input
-        .lines()
-        .map(|line| {
-            let (_, (springs, pattern)) = parsers::part1(line)
-                .unwrap_or_else(|e| panic!("Parser failed {e:?} on line {line}"));
-
-            let springs = std::iter::repeat(springs).take(5);
-            let springs = Itertools::intersperse(springs, vec![Spring::Unknown])
-                .flatten()
-                .collect_vec();
-
-            let pattern = std::iter::repeat(pattern).take(5).flatten().collect_vec();
-
-            mutual_cached::permutations(&springs, &pattern, 0, &mut cache)
-        })
-        .sum()
-}
-
 mod brute_force {
     use super::*;
 
@@ -148,16 +112,17 @@ mod cached {
 
     /// Computes permutations recursively and stores intermediate values in a cache.
     pub fn permutations(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
-        if let Some(cached) = cache.get(&(springs.len(), pattern.len(), count)) {
-            return *cached;
-        }
-
-        let permutations = match springs.first() {
+        match springs.first() {
             Some(Spring::Working) => case_working(springs, pattern, count, cache),
             Some(Spring::Broken) => case_broken(springs, pattern, count, cache),
             Some(Spring::Unknown) => {
-                case_working(springs, pattern, count, cache)
-                    + case_broken(springs, pattern, count, cache)
+                if let Some(cached) = cache.get(&(springs.len(), pattern.len(), count)) {
+                    return *cached;
+                }
+                let permutations = case_working(springs, pattern, count, cache)
+                    + case_broken(springs, pattern, count, cache);
+                cache.insert((springs.len(), pattern.len(), count), permutations);
+                permutations
             }
             // Finished the last spring with a Spring::Working
             None if pattern.is_empty() => 1,
@@ -165,77 +130,7 @@ mod cached {
             None if pattern == [count] => 1,
             // Finished the last spring, but the pattern was not followed
             None => 0,
-        };
-
-        cache.insert((springs.len(), pattern.len(), count), permutations);
-        permutations
-    }
-
-    fn case_broken(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
-        // Broken springs outside of allowed pattern
-        let Some(max_count) = pattern.first() else {
-            return 0;
-        };
-        // More broken springs than allowed in the pattern
-        if *max_count <= count {
-            return 0;
         }
-        permutations(&springs[1..], pattern, count + 1, cache)
-    }
-
-    fn case_working(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
-        // First working spring after `count` broken ones
-        if pattern.first() == Some(&count) {
-            return permutations(&springs[1..], &pattern[1..], 0, cache);
-        }
-        // Multiple working springs in a row, or working springs at the start
-        if count == 0 {
-            return permutations(&springs[1..], pattern, 0, cache);
-        }
-        return 0;
-    }
-}
-
-mod mutual_cached {
-    use super::*;
-    use std::{
-        collections::hash_map::DefaultHasher,
-        hash::{Hash, Hasher},
-    };
-    type Cache = HashMap<u64, usize>;
-
-    fn hash(springs: &[Spring], pattern: &[u8], count: u8) -> u64 {
-        let mut state = DefaultHasher::new();
-        springs.hash(&mut state);
-        pattern.hash(&mut state);
-        count.hash(&mut state);
-        state.finish()
-    }
-
-    /// Computes permutations recursively and stores intermediate values in a cache.
-    pub fn permutations(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
-        let key = hash(springs, pattern, count);
-        if let Some(cached) = cache.get(&key) {
-            return *cached;
-        }
-
-        let permutations = match springs.first() {
-            Some(Spring::Working) => case_working(springs, pattern, count, cache),
-            Some(Spring::Broken) => case_broken(springs, pattern, count, cache),
-            Some(Spring::Unknown) => {
-                case_working(springs, pattern, count, cache)
-                    + case_broken(springs, pattern, count, cache)
-            }
-            // Finished the last spring with a Spring::Working
-            None if pattern.is_empty() => 1,
-            // Finished the last spring with a Spring::Broken
-            None if pattern == [count] => 1,
-            // Finished the last spring, but the pattern was not followed
-            None => 0,
-        };
-
-        cache.insert(key, permutations);
-        permutations
     }
 
     fn case_broken(springs: &[Spring], pattern: &[u8], count: u8, cache: &mut Cache) -> usize {
@@ -355,30 +250,6 @@ mod tests {
     }
 
     #[test]
-    fn test_part1_mutual_cache() {
-        let input = "???.### 1,1,3";
-        assert_eq!(1, part1_mutual_cache(input), "1: {input}");
-
-        let input = ".??..??...?##. 1,1,3";
-        assert_eq!(4, part1_mutual_cache(input), "2: {input}");
-
-        let input = "?#?#?#?#?#?#?#? 1,3,1,6";
-        assert_eq!(1, part1_mutual_cache(input), "3: {input}");
-
-        let input = "????.#...#... 4,1,1";
-        assert_eq!(1, part1_mutual_cache(input), "4: {input}");
-
-        let input = "????.######..#####. 1,6,5";
-        assert_eq!(4, part1_mutual_cache(input), "5: {input}");
-
-        let input = "?###???????? 3,2,1";
-        assert_eq!(10, part1_mutual_cache(input), "6: {input}");
-
-        let input = Day::SAMPLE_PART1;
-        assert_eq!(21, part1_mutual_cache(input));
-    }
-
-    #[test]
     fn test_part2() {
         let input = "???.### 1,1,3";
         assert_eq!(1, Day::part2(input), "1: {input}");
@@ -399,29 +270,5 @@ mod tests {
         assert_eq!(506250, Day::part2(input), "6: {input}");
 
         Day::test_part2(525152)
-    }
-
-    #[test]
-    fn test_part2_mutual_cache() {
-        let input = "???.### 1,1,3";
-        assert_eq!(1, part2_mutual_cache(input), "1: {input}");
-
-        let input = ".??..??...?##. 1,1,3";
-        assert_eq!(16384, part2_mutual_cache(input), "2: {input}");
-
-        let input = "?#?#?#?#?#?#?#? 1,3,1,6";
-        assert_eq!(1, part2_mutual_cache(input), "3: {input}");
-
-        let input = "????.#...#... 4,1,1";
-        assert_eq!(16, part2_mutual_cache(input), "4: {input}");
-
-        let input = "????.######..#####. 1,6,5";
-        assert_eq!(2500, part2_mutual_cache(input), "5: {input}");
-
-        let input = "?###???????? 3,2,1";
-        assert_eq!(506250, part2_mutual_cache(input), "6: {input}");
-
-        let input = Day::SAMPLE_PART2;
-        assert_eq!(525152, part2_mutual_cache(input));
     }
 }
