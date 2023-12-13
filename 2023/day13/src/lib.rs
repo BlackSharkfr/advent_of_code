@@ -1,5 +1,6 @@
 use aoc::Aoc;
 use itertools::Itertools;
+use rayon::prelude::*;
 
 pub struct Day;
 
@@ -11,24 +12,52 @@ impl Aoc for Day {
     const SAMPLE_PART2: &'static str = include_str!("../inputs/sample2.txt");
 
     fn part1(input: &str) -> Self::OUTPUT {
-        let Ok((_, grids)) = parsers::part1(input) else {
-            panic!("Parser failed")
-        };
-        grids
-            .iter()
-            .map(Symmetry::find_symmetry_part1)
-            .map(Symmetry::to_number)
+        input
+            .split("\r\n\r\n")
+            .par_bridge()
+            .map(|str| {
+                let (_, grid) = parsers::part1(str)
+                    .unwrap_or_else(|e| panic!("Parser failed {e:?} on input {str}"));
+                Symmetry::find_symmetry_part1(&grid).to_number()
+            })
             .sum()
     }
 
     fn part2(input: &str) -> Self::OUTPUT {
-        let Ok((_, grids)) = parsers::part1(input) else {
-            panic!("Parser failed")
-        };
-        grids
-            .iter()
-            .map(Symmetry::find_symmetry_part2)
-            .map(Symmetry::to_number)
+        input
+            .split("\r\n\r\n")
+            .par_bridge()
+            .map(|str| {
+                let (_, grid) = parsers::part1(str)
+                    .unwrap_or_else(|e| panic!("Parser failed {e:?} on input {str}"));
+                Symmetry::find_symmetry_part2(&grid).to_number()
+            })
+            .sum()
+    }
+}
+
+/// For Benching purposes
+pub mod single_thread {
+    use super::*;
+    pub fn part1(input: &str) -> u32 {
+        input
+            .split("\r\n\r\n")
+            .map(|str| {
+                let (_, grid) = parsers::part1(str)
+                    .unwrap_or_else(|e| panic!("Parser failed {e:?} on input {str}"));
+                Symmetry::find_symmetry_part1(&grid).to_number()
+            })
+            .sum()
+    }
+
+    pub fn part2(input: &str) -> u32 {
+        input
+            .split("\r\n\r\n")
+            .map(|str| {
+                let (_, grid) = parsers::part1(str)
+                    .unwrap_or_else(|e| panic!("Parser failed {e:?} on input {str}"));
+                Symmetry::find_symmetry_part2(&grid).to_number()
+            })
             .sum()
     }
 }
@@ -147,16 +176,12 @@ mod parsers {
 
     use super::*;
 
-    pub fn part1(input: &str) -> IResult<&str, Vec<Vec<Vec<Tile>>>> {
-        separated_list1(line_ending, grid)(input)
-    }
-
-    fn grid(input: &str) -> IResult<&str, Vec<Vec<Tile>>> {
-        many1(line)(input)
+    pub fn part1(input: &str) -> IResult<&str, Vec<Vec<Tile>>> {
+        separated_list1(line_ending, line)(input)
     }
 
     fn line(input: &str) -> IResult<&str, Vec<Tile>> {
-        many1(tile).terminated(line_ending).parse(input)
+        many1(tile)(input)
     }
 
     fn tile(input: &str) -> IResult<&str, Tile> {
