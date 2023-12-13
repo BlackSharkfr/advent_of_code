@@ -85,9 +85,9 @@ impl Symmetry {
         // Vertical symmetry
         if let Some(y) = (0..height - 1).position(|y| {
             (0..width).all(|x| {
-                (0..=y)
-                    .filter(|i| i + y + 1 < height)
-                    .all(|i| input[y - i][x] == input[y + 1 + i][x])
+                let above_mirror = (0..=y).rev().map(|i| &input[i][x]);
+                let below_mirror = (y + 1..height).map(|i| &input[i][x]);
+                above_mirror.zip(below_mirror).all(|(a, b)| a == b)
             })
         }) {
             return Self::Vertical(y + 1);
@@ -96,9 +96,9 @@ impl Symmetry {
         // Horizontal symmetry
         if let Some(x) = (0..width - 1).position(|x| {
             (0..height).all(|y| {
-                (0..=x)
-                    .filter(|i| i + x + 1 < width)
-                    .all(|i| input[y][x - i] == input[y][x + 1 + i])
+                let left_of_mirror = (0..=x).rev().map(|i| &input[y][i]);
+                let right_of_mirror = (x + 1..width).map(|i| &input[y][i]);
+                left_of_mirror.zip(right_of_mirror).all(|(l, r)| l == r)
             })
         }) {
             return Self::Horizontal(x + 1);
@@ -115,9 +115,11 @@ impl Symmetry {
         if let Some(y) = (0..height - 1).position(|y| {
             (0..width)
                 .map(|x| {
-                    (0..=y)
-                        .filter(|i| i + y + 1 < height)
-                        .filter(|i| input[y - i][x] != input[y + 1 + i][x])
+                    let above_mirror = (0..=y).rev().map(|i| &input[i][x]);
+                    let below_mirror = (y + 1..height).map(|i| &input[i][x]);
+                    above_mirror
+                        .zip(below_mirror)
+                        .filter(|(a, b)| a != b)
                         .count()
                 })
                 .sum::<usize>()
@@ -130,9 +132,11 @@ impl Symmetry {
         if let Some(x) = (0..width - 1).position(|x| {
             (0..height)
                 .map(|y| {
-                    (0..=x)
-                        .filter(|i| i + x + 1 < width)
-                        .filter(|i| input[y][x - i] != input[y][x + 1 + i])
+                    let left_of_mirror = (0..=x).rev().map(|i| &input[y][i]);
+                    let right_of_mirror = (x + 1..width).map(|i| &input[y][i]);
+                    left_of_mirror
+                        .zip(right_of_mirror)
+                        .filter(|(l, r)| l != r)
                         .count()
                 })
                 .sum::<usize>()
