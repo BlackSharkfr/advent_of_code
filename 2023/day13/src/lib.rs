@@ -43,7 +43,6 @@ enum Symmetry {
 }
 impl Symmetry {
     fn to_number(self) -> u32 {
-        // println!("Symmetry found : {self:?}");
         match self {
             Self::Horizontal(n) => n as u32,
             Self::Vertical(n) => 100 * n as u32,
@@ -65,22 +64,18 @@ impl Symmetry {
             return Self::Vertical(y + 1);
         }
 
-        // Horizontal
+        // Horizontal symmetry
         if let Some(x) = (0..width - 1).position(|x| {
-            input.iter().all(|line| {
+            (0..height).all(|y| {
                 (0..=x)
                     .filter(|i| i + x + 1 < width)
-                    .all(|i| line[x - i] == line[x + 1 + i])
+                    .all(|i| input[y][x - i] == input[y][x + 1 + i])
             })
         }) {
             return Self::Horizontal(x + 1);
         }
 
-        // Error
-        panic!(
-            "Symmetry not found : \n{}",
-            input.iter().map(|line| format!("{line:?}")).join("\n")
-        )
+        panic!("Symmetry not found : \n{}", vec2d_to_string(input),)
     }
 
     fn find_symmetry_part2(input: &Vec<Vec<Tile>>) -> Self {
@@ -102,14 +97,13 @@ impl Symmetry {
             return Self::Vertical(y + 1);
         }
 
-        // Horizontal
+        // Horizontal symmetry
         if let Some(x) = (0..width - 1).position(|x| {
-            input
-                .iter()
-                .map(|line| {
+            (0..height)
+                .map(|y| {
                     (0..=x)
                         .filter(|i| i + x + 1 < width)
-                        .filter(|i| line[x - i] != line[x + 1 + i])
+                        .filter(|i| input[y][x - i] != input[y][x + 1 + i])
                         .count()
                 })
                 .sum::<usize>()
@@ -118,12 +112,13 @@ impl Symmetry {
             return Self::Horizontal(x + 1);
         }
 
-        // Error
-        panic!(
-            "Symmetry not found : \n{}",
-            input.iter().map(|line| format!("{line:?}")).join("\n")
-        )
+        panic!("Symmetry not found : \n{}", vec2d_to_string(input),)
     }
+}
+
+/// Prints the grid for debugging
+fn vec2d_to_string(input: &Vec<Vec<Tile>>) -> String {
+    input.iter().map(|line| format!("{line:?}")).join("\n")
 }
 
 #[derive(Debug, PartialEq)]
