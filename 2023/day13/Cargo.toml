@@ -1,0 +1,19 @@
+[package]
+name = "day13"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aoc = { workspace = true }
+divan = { workspace = true }
+itertools = { workspace = true }
+rayon = { workspace = true }
+nom = { workspace = true }
+nom-supreme = { workspace = true }
+
+[[bench]]
+name = "day13"
+path = "benches/divan_benchmark.rs"
+harness = false
