@@ -48,16 +48,17 @@ fn debug_grid(grid: &Grid) -> String {
 fn move_north(grid: &mut Grid) {
     let height = grid.len();
     let width = grid[0].len();
+    let mut insert_indexes = std::iter::repeat(0).take(width).collect_vec();
     for y in 0..height {
         for x in 0..width {
-            if grid[y][x] == Some(Rock::Round) {
-                grid[y][x] = None;
-                let insert = (0..y)
-                    .rev()
-                    .find(|y| (grid[*y][x] != None))
-                    .map(|y| y + 1)
-                    .unwrap_or(0);
-                grid[insert][x] = Some(Rock::Round);
+            match &grid[y][x] {
+                None => (),
+                Some(Rock::Square) => insert_indexes[x] = y + 1,
+                Some(Rock::Round) => {
+                    grid[y][x] = None;
+                    grid[insert_indexes[x]][x] = Some(Rock::Round);
+                    insert_indexes[x] += 1;
+                }
             }
         }
     }
@@ -66,50 +67,53 @@ fn move_north(grid: &mut Grid) {
 fn move_south(grid: &mut Grid) {
     let height = grid.len();
     let width = grid[0].len();
+    let mut insert_indexes = std::iter::repeat(height).take(width).collect_vec();
     for y in (0..height).rev() {
         for x in 0..width {
-            if grid[y][x] == Some(Rock::Round) {
-                grid[y][x] = None;
-                let insert = (y..height)
-                    .find(|y| (grid[*y][x] != None))
-                    .map(|y| y - 1)
-                    .unwrap_or(height - 1);
-                grid[insert][x] = Some(Rock::Round);
+            match &grid[y][x] {
+                None => (),
+                Some(Rock::Square) => insert_indexes[x] = y,
+                Some(Rock::Round) => {
+                    grid[y][x] = None;
+                    grid[insert_indexes[x] - 1][x] = Some(Rock::Round);
+                    insert_indexes[x] -= 1;
+                }
             }
         }
     }
 }
 
 fn move_west(grid: &mut Grid) {
-    let height = grid.len();
     let width = grid[0].len();
-    for x in 0..width {
-        for y in 0..height {
-            if grid[y][x] == Some(Rock::Round) {
-                grid[y][x] = None;
-                let insert = (0..x)
-                    .rev()
-                    .find(|x| (grid[y][*x] != None))
-                    .map(|x| x + 1)
-                    .unwrap_or(0);
-                grid[y][insert] = Some(Rock::Round);
+    for line in grid.iter_mut() {
+        let mut insert_index = 0;
+        for x in 0..width {
+            match line[x] {
+                None => (),
+                Some(Rock::Square) => insert_index = x + 1,
+                Some(Rock::Round) => {
+                    line[x] = None;
+                    line[insert_index] = Some(Rock::Round);
+                    insert_index += 1
+                }
             }
         }
     }
 }
 
 fn move_east(grid: &mut Grid) {
-    let height = grid.len();
     let width = grid[0].len();
-    for x in (0..width).rev() {
-        for y in 0..height {
-            if grid[y][x] == Some(Rock::Round) {
-                grid[y][x] = None;
-                let insert = (x..width)
-                    .find(|x| (grid[y][*x] != None))
-                    .map(|x| x - 1)
-                    .unwrap_or(width - 1);
-                grid[y][insert] = Some(Rock::Round);
+    for line in grid.iter_mut().rev() {
+        let mut insert_index = width;
+        for x in (0..width).rev() {
+            match line[x] {
+                None => (),
+                Some(Rock::Square) => insert_index = x,
+                Some(Rock::Round) => {
+                    line[x] = None;
+                    line[insert_index - 1] = Some(Rock::Round);
+                    insert_index -= 1
+                }
             }
         }
     }
