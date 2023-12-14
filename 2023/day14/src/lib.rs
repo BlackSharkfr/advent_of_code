@@ -37,6 +37,7 @@ impl Aoc for Day {
         count_load(&cycle_history[solution_index])
     }
 }
+
 type Grid = Vec<Vec<Option<Rock>>>;
 #[allow(dead_code)]
 fn debug_grid(grid: &Grid) -> String {
@@ -45,7 +46,7 @@ fn debug_grid(grid: &Grid) -> String {
         .join("\n")
 }
 
-fn move_north(grid: &mut Grid) {
+pub fn move_north(grid: &mut Grid) {
     let height = grid.len();
     let width = grid[0].len();
     let mut insert_indexes = std::iter::repeat(0).take(width).collect_vec();
@@ -64,26 +65,26 @@ fn move_north(grid: &mut Grid) {
     }
 }
 
-fn move_south(grid: &mut Grid) {
+pub fn move_south(grid: &mut Grid) {
     let height = grid.len();
     let width = grid[0].len();
     let mut insert_indexes = std::iter::repeat(height).take(width).collect_vec();
     for y in (0..height).rev() {
-        for x in 0..width {
+        for x in (0..width).rev() {
             match &grid[y][x] {
                 None => (),
                 Some(Rock::Square) => insert_indexes[x] = y,
                 Some(Rock::Round) => {
                     grid[y][x] = None;
-                    grid[insert_indexes[x] - 1][x] = Some(Rock::Round);
                     insert_indexes[x] -= 1;
+                    grid[insert_indexes[x]][x] = Some(Rock::Round);
                 }
             }
         }
     }
 }
 
-fn move_west(grid: &mut Grid) {
+pub fn move_west(grid: &mut Grid) {
     let width = grid[0].len();
     for line in grid.iter_mut() {
         let mut insert_index = 0;
@@ -101,9 +102,9 @@ fn move_west(grid: &mut Grid) {
     }
 }
 
-fn move_east(grid: &mut Grid) {
+pub fn move_east(grid: &mut Grid) {
     let width = grid[0].len();
-    for line in grid.iter_mut().rev() {
+    for line in grid.iter_mut() {
         let mut insert_index = width;
         for x in (0..width).rev() {
             match line[x] {
@@ -111,8 +112,8 @@ fn move_east(grid: &mut Grid) {
                 Some(Rock::Square) => insert_index = x,
                 Some(Rock::Round) => {
                     line[x] = None;
-                    line[insert_index - 1] = Some(Rock::Round);
-                    insert_index -= 1
+                    insert_index -= 1;
+                    line[insert_index] = Some(Rock::Round);
                 }
             }
         }
@@ -161,7 +162,7 @@ impl Rock {
     }
 }
 
-mod parsers {
+pub mod parsers {
     use nom::{
         character::complete::{anychar, line_ending},
         multi::{many1, separated_list1},
@@ -187,6 +188,44 @@ mod parsers {
     }
 }
 
+/// Silly experiment with 2 threads
+pub mod dual_thread {
+    use std::{sync::mpsc, thread};
+
+    use super::*;
+    pub fn part2(input: &str) -> usize {
+        let (_, mut grid) = parsers::grid(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
+
+        let mut history = Vec::new();
+        let (tx, rx) = mpsc::channel();
+
+        // Cycling thread
+        thread::spawn(move || {
+            while tx.send(grid.clone()).is_ok() {
+                cycle(&mut grid);
+            }
+        });
+
+        // Search for loop in main thread
+        loop {
+            let grid = rx.recv().unwrap();
+            if let Some(loop_start) = history.iter().position(|prev| *prev == grid) {
+                // The other thread no longer need to keep cycling, let's kill it remotely :
+                // since we drop the channel receiver, the next time the cycling thread attempts to use the sender it will receive an error and break from it's loop
+                // dropping here is optionnal : rx will be dropped anyways when the main thread returns.
+                // drop(rx);
+
+                let loop_length = history.len() - loop_start;
+                // println!("Loop found starts at {loop_start} cycles, loop length : {loop_length}, history[{loop_start}] == history[{}]", history.len(),);
+                let solution_index = loop_start + ((1_000_000_000 - loop_start) % loop_length);
+                let billionth_grid = &history[solution_index];
+                return count_load(billionth_grid);
+            }
+            history.push(grid);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,5 +238,11 @@ mod tests {
     #[test]
     fn test_part2() {
         Day::test_part2(64)
+    }
+
+    #[test]
+    fn test_dual_thread() {
+        let input = Day::INPUT;
+        assert_eq!(96003, dual_thread::part2(input));
     }
 }
