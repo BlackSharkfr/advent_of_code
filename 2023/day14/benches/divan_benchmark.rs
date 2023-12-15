@@ -10,7 +10,6 @@ fn main() {
 }
 
 mod part1 {
-    use day14::parsers;
 
     use super::*;
     #[divan::bench]
@@ -19,7 +18,11 @@ mod part1 {
             .with_inputs(|| Day::INPUT)
             .bench_values(|input| Day::part1(input))
     }
+}
 
+mod components {
+    use super::*;
+    use day14::parsers;
     #[divan::bench]
     fn nom_parser(bencher: Bencher) {
         bencher
