@@ -15,14 +15,24 @@ impl Aoc for Day {
     const SAMPLE_PART2: &'static str = include_str!("../inputs/sample2.txt");
 
     fn part1(input: &str) -> Self::OUTPUT {
-        input.split(',').map(HolidayHasher::hash_str).sum()
+        let mut hasher = HolidayHasher::new();
+        let mut total = 0;
+        for byte in input.as_bytes() {
+            if *byte == b',' {
+                total += hasher.finish();
+                hasher = HolidayHasher::new();
+                continue;
+            }
+            (*byte).hash(&mut hasher);
+        }
+        total += hasher.finish();
+        total
     }
 
-    fn part2(input: &str) -> Self::OUTPUT {
+    fn part2(mut input: &str) -> Self::OUTPUT {
         let mut lensboxes: [Vec<(&str, u32)>; 256] = array::from_fn(|_| Vec::new());
-        for str in input.split(',') {
-            let (_, instruction) = parsers::instruction(str)
-                .unwrap_or_else(|e| panic!("Failed to parse instruction {e:?} : {str}"));
+        while let Ok((remain, instruction)) = parsers::instruction(input) {
+            input = remain;
 
             let box_index = HolidayHasher::hash_str(instruction.label) as usize;
             let lensbox = &mut lensboxes[box_index];
@@ -44,13 +54,13 @@ impl Aoc for Day {
             }
         }
         lensboxes
-            .iter()
+            .into_iter()
             .zip(1..)
             .map(|(lensbox, box_number)| {
                 lensbox
-                    .iter()
+                    .into_iter()
                     .zip(1..)
-                    .map(|((_, power), slot_number)| box_number * slot_number * *power as u64)
+                    .map(|((_, power), slot_number)| box_number * slot_number * power as u64)
                     .sum::<u64>()
             })
             .sum::<u64>()
@@ -83,10 +93,12 @@ impl HolidayHasher {
     }
 }
 
+#[derive(Debug)]
 struct Instruction<'a> {
     pub label: &'a str,
     pub action: Action,
 }
+#[derive(Debug)]
 enum Action {
     AddLens(u32),
     RemoveLens,
@@ -94,35 +106,31 @@ enum Action {
 
 mod parsers {
     use nom::{
-        branch::alt,
-        bytes::complete::tag,
-        character::complete::{alpha1, u32},
+        character::complete::{alpha1, anychar, u32},
+        combinator::fail,
         IResult,
     };
 
     use super::*;
     pub fn instruction(input: &str) -> IResult<&str, Instruction> {
         let (input, label) = alpha1(input)?;
-        let (input, instruction) = alt((tag("="), tag("-")))(input)?;
-        match instruction {
-            "-" => Ok((
-                input,
-                Instruction {
-                    label,
-                    action: Action::RemoveLens,
-                },
-            )),
-            "=" => {
-                let (input, power) = u32(input)?;
-                Ok((
-                    input,
-                    Instruction {
-                        label,
-                        action: Action::AddLens(power),
-                    },
-                ))
+        let (input, action) = action(input)?;
+        // remove optionnal ','
+        let input = input.get(1..).unwrap_or("");
+
+        let instruction = Instruction { label, action };
+        Ok((input, instruction))
+    }
+
+    fn action(input: &str) -> IResult<&str, Action> {
+        let (remain, c) = anychar(input)?;
+        match c {
+            '=' => {
+                let (input, power) = u32(remain)?;
+                Ok((input, Action::AddLens(power)))
             }
-            _ => unreachable!(),
+            '-' => Ok((remain, Action::RemoveLens)),
+            _ => fail(input),
         }
     }
 }
