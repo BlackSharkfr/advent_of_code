@@ -13,8 +13,7 @@ impl Aoc for Day {
 
     fn part1(input: &str) -> Self::OUTPUT {
         let (_, tiles) = parsers::tile_map(input).unwrap_or_else(|e| panic!("Parser failed {e:?}"));
-        let start = (Tile::RayEast, (0, 0));
-        brute_force::compute_path(start, tiles)
+        brute_force::compute_path(Tile::RayEast, (0, 0), tiles)
     }
 
     fn part2(input: &str) -> Self::OUTPUT {
@@ -24,128 +23,116 @@ impl Aoc for Day {
     }
 }
 
-bitflags! {
-    #[derive(Debug, PartialEq, Eq, Copy,Clone)]
-    pub struct Direction: u8 {
-        const North = 0b0001;
-        const South = 0b0010;
-        const East =  0b0100;
-        const West =  0b1000;
-    }
+pub type TileMap = Vec<Vec<Tile>>;
 
+bitflags! {
+    /// Single byte combining data for both the mirrors and the ray directions
     #[derive(Debug, PartialEq, Eq, Copy,Clone)]
     pub struct Tile: u8 {
         const RayNorth = 1 << 0;
         const RaySouth = 1 << 1;
         const RayEast =  1 << 2;
         const RayWest =  1 << 3;
-        const AnyRay = Self::RayNorth.bits() | Self::RaySouth.bits() | Self::RayEast.bits() | Self::RayWest.bits();
-        const MirrorNS = 1 << 4;
-        const MirrorEW = 1 << 5;
+        const AllRays = Self::RayNorth.bits() | Self::RaySouth.bits() | Self::RayEast.bits() | Self::RayWest.bits();
+        const SplitterNS = 1 << 4;
+        const SplitterEW = 1 << 5;
         const MirrorNE = 1 << 6;
         const MirrorSE = 1 << 7;
-        const AnyMirror = Self::MirrorNS.bits() | Self::MirrorEW.bits() | Self::MirrorNE.bits() | Self::MirrorSE.bits() ;
+        const AllMirrors = Self::SplitterNS.bits() | Self::SplitterEW.bits() | Self::MirrorNE.bits() | Self::MirrorSE.bits() ;
     }
 }
 
 impl Tile {
-    fn raywalk(&mut self, movement: Self) -> Self {
-        if self.contains(movement) {
+    /// Write the light ray in `self` and outputs the next ray
+    /// Input rays must be "pure" rays (single direction, no mirror)
+    /// Output rays may contain 0, 1 or 2 rays combined
+    fn raywalk(&mut self, input_ray: Self) -> Self {
+        // Tile already visited with the same ray direction.
+        if self.contains(input_ray) {
             return Self::empty();
         }
-        *self |= movement;
+
+        *self |= input_ray;
 
         // Go straight
-        if !self.intersects(Self::AnyMirror) {
-            return movement;
+        if !self.intersects(Self::AllMirrors) {
+            return input_ray;
         }
-        if self.contains(Self::MirrorNE) {
-            return match movement {
-                Self::RayEast => Self::RayNorth,
-                Self::RaySouth => Self::RayWest,
-                Self::RayWest => Self::RaySouth,
-                Self::RayNorth => Self::RayEast,
+
+        // Bouncing mirrors
+        if self.intersects(Self::MirrorNE | Self::MirrorSE) {
+            return match (self.contains(Self::MirrorNE), input_ray) {
+                (true, Self::RayEast) => Self::RayNorth,
+                (true, Self::RaySouth) => Self::RayWest,
+                (true, Self::RayWest) => Self::RaySouth,
+                (true, Self::RayNorth) => Self::RayEast,
+                (false, Self::RayEast) => Self::RaySouth,
+                (false, Self::RaySouth) => Self::RayEast,
+                (false, Self::RayWest) => Self::RayNorth,
+                (false, Self::RayNorth) => Self::RayWest,
                 _ => unreachable!(),
             };
         }
-        if self.contains(Self::MirrorSE) {
-            return match movement {
-                Self::RayEast => Self::RaySouth,
-                Self::RaySouth => Self::RayEast,
-                Self::RayWest => Self::RayNorth,
-                Self::RayNorth => Self::RayWest,
-                _ => unreachable!(),
-            };
-        }
-        if self.contains(Self::MirrorEW) {
-            return match movement {
-                Self::RayEast | Self::RayWest => movement,
-                Self::RaySouth | Self::RayNorth => Self::RayWest | Self::RayEast,
-                _ => unreachable!(),
-            };
-        }
-        match movement {
-            Self::RayEast | Self::RayWest => Self::RayNorth | Self::RaySouth,
-            Self::RaySouth | Self::RayNorth => movement,
+
+        // Splitting Mirrors
+        match (self.contains(Self::SplitterEW), input_ray) {
+            (true, Self::RayEast) | (true, Self::RayWest) => input_ray,
+            (true, Self::RaySouth) | (true, Self::RayNorth) => Self::RayEast | Self::RayWest,
+            (false, Self::RaySouth) | (false, Self::RayNorth) => input_ray,
+            (false, Self::RayEast) | (false, Self::RayWest) => Self::RaySouth | Self::RayNorth,
             _ => unreachable!(),
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Mirror {
-    SplitVertical,
-    SplitHorizontal,
-    NorthEast,
-    SouthEast,
 }
 
 pub mod brute_force {
     use super::*;
     pub fn part1(input: &str) -> usize {
         let (_, tiles) = parsers::tile_map(input).unwrap();
-        let start = (Tile::RayEast, (0, 0));
-        compute_path(start, tiles)
+        compute_path(Tile::RayEast, (0, 0), tiles)
     }
 
-    pub fn compute_path(start: (Tile, (usize, usize)), mut tiles: Vec<Vec<Tile>>) -> usize {
+    pub fn compute_path(
+        start_ray: Tile,
+        start_coords: (usize, usize),
+        mut tiles: TileMap,
+    ) -> usize {
         let height = tiles.len();
         let width = tiles[0].len();
-        let mut beams = Vec::from([start]);
-        while let Some((beam, (x, y))) = beams.pop() {
+
+        let mut beams = Vec::from([(start_ray, start_coords)]);
+        while let Some((ray, (x, y))) = beams.pop() {
             let tile = &mut tiles[y][x];
-            for next in tile.raywalk(beam).iter() {
-                let beam = match next {
-                    Tile::RayEast if x != width - 1 => (next, (x + 1, y)),
-                    Tile::RayWest if x != 0 => (next, (x - 1, y)),
-                    Tile::RayNorth if y != 0 => (next, (x, y - 1)),
-                    Tile::RaySouth if y != height - 1 => (next, (x, y + 1)),
+            for next_ray in tile.raywalk(ray).iter() {
+                let next_coords = match next_ray {
+                    Tile::RayEast if x != width - 1 => (x + 1, y),
+                    Tile::RayWest if x != 0 => (x - 1, y),
+                    Tile::RayNorth if y != 0 => (x, y - 1),
+                    Tile::RaySouth if y != height - 1 => (x, y + 1),
                     _ => continue,
                 };
-                beams.push(beam);
+                beams.push((next_ray, next_coords));
             }
         }
+
         tiles
             .iter()
             .flat_map(|line| line.iter())
-            .filter(|tile| tile.intersects(Tile::AnyRay))
+            .filter(|tile| tile.intersects(Tile::AllRays))
             .count()
     }
 
-    pub fn compute_part2(tiles: Vec<Vec<Tile>>) -> usize {
-        let height = tiles.len();
-        let width = tiles[0].len();
-        starting_positions(height, width)
+    pub fn compute_part2(tiles: TileMap) -> usize {
+        starting_positions(&tiles)
             .par_bridge()
-            .map(|start| compute_path(start, tiles.clone()))
+            .map(|(ray, coords)| compute_path(ray, coords, tiles.clone()))
             .max()
             .unwrap()
     }
 
-    fn starting_positions(
-        height: usize,
-        width: usize,
-    ) -> impl Iterator<Item = (Tile, (usize, usize))> {
+    fn starting_positions(tiles: &TileMap) -> impl Iterator<Item = (Tile, (usize, usize))> {
+        let height = tiles.len();
+        let width = tiles[0].len();
         let top = (0..width).map(move |x| (Tile::RaySouth, (x, 0)));
         let bottom = (0..width).map(move |x| (Tile::RayNorth, (x, height - 1)));
         let left = (0..height).map(move |y| (Tile::RayEast, (0, y)));
@@ -164,23 +151,6 @@ pub mod parsers {
 
     use super::*;
 
-    pub fn mirror_map(input: &str) -> IResult<&str, Vec<Vec<Option<Mirror>>>> {
-        separated_list1(line_ending, many1(mirror))(input)
-    }
-
-    fn mirror(input: &str) -> IResult<&str, Option<Mirror>> {
-        anychar
-            .map_res(|c: char| match c {
-                '.' => Ok(None),
-                '/' => Ok(Some(Mirror::NorthEast)),
-                '\\' => Ok(Some(Mirror::SouthEast)),
-                '|' => Ok(Some(Mirror::SplitVertical)),
-                '-' => Ok(Some(Mirror::SplitHorizontal)),
-                _ => Err(()),
-            })
-            .parse(input)
-    }
-
     pub fn tile_map(input: &str) -> IResult<&str, Vec<Vec<Tile>>> {
         separated_list1(line_ending, many1(tile))(input)
     }
@@ -191,8 +161,8 @@ pub mod parsers {
                 '.' => Ok(Tile::empty()),
                 '/' => Ok(Tile::MirrorNE),
                 '\\' => Ok(Tile::MirrorSE),
-                '|' => Ok(Tile::MirrorNS),
-                '-' => Ok(Tile::MirrorEW),
+                '|' => Ok(Tile::SplitterNS),
+                '-' => Ok(Tile::SplitterEW),
                 _ => Err(()),
             })
             .parse(input)

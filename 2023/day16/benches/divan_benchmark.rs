@@ -24,7 +24,7 @@ mod part1 {
         bencher
             .with_inputs(|| parsers::tile_map(Day::INPUT).unwrap())
             .bench_values(|(_, mirrors)| {
-                day16::brute_force::compute_path((Tile::RayEast, (0, 0)), mirrors)
+                day16::brute_force::compute_path(Tile::RayEast, (0, 0), mirrors)
             })
     }
 }
@@ -36,6 +36,6 @@ mod part2 {
     fn brute_force(bencher: Bencher) {
         bencher
             .with_inputs(|| parsers::tile_map(Day::INPUT).unwrap().1)
-            .bench_values(|tiles: Vec<Vec<Tile>>| day16::brute_force::compute_part2(tiles))
+            .bench_values(|tiles| day16::brute_force::compute_part2(tiles))
     }
 }
