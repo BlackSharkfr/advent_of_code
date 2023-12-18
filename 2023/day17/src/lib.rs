@@ -27,33 +27,103 @@ fn dijkstra(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
     let width = heatmap[0].len() as u8;
     let end = (width - 1, height - 1);
 
-    let start_right = Crucible {
-        direction: Direction::East,
-        ..Default::default()
-    };
-    let start_down = Crucible {
-        direction: Direction::South,
-        ..Default::default()
-    };
-
-    let mut queue = BinaryHeap::from([(start_right), (start_down)]);
+    let mut queue = BinaryHeap::from([Crucible::default()]);
     let mut visited = HashSet::new();
     loop {
         let crucible = queue.pop().expect("Queue has run out of nodes");
+        if !visited.insert(crucible.visited_state()) {
+            continue;
+        }
         if (crucible.x, crucible.y) == end && crucible.moves >= min_moves {
             return crucible.total_heat_loss;
         }
         for mut crucible in crucible.next_moves(min_moves, max_moves, width, height) {
-            if !visited.insert(crucible.visited_state()) {
-                continue;
-            }
             crucible.total_heat_loss += heatmap[crucible.y as usize][crucible.x as usize] as u32;
             queue.push(crucible);
         }
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub mod using_pathfinding {
+
+    use super::*;
+    use crate::Crucible;
+
+    pub fn dijkstra(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
+        let start = Crucible {
+            direction: Direction::East,
+            ..Default::default()
+        };
+        let height = heatmap.len();
+        let width = heatmap[0].len();
+        let successors = |c: &Crucible| {
+            c.clone()
+                .next_moves(min_moves, max_moves, width as u8, height as u8)
+                .map(|c| {
+                    let x = c.x as usize;
+                    let y = c.y as usize;
+                    (c, heatmap[y][x])
+                })
+        };
+        let success = |c: &Crucible| {
+            c.x == width as u8 - 1 && c.y == height as u8 - 1 && c.moves >= min_moves
+        };
+        let res = pathfinding::directed::dijkstra::dijkstra(&start, &successors, success);
+        res.unwrap().1
+    }
+
+    pub fn astar(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
+        let start = Crucible {
+            direction: Direction::East,
+            ..Default::default()
+        };
+        let height = heatmap.len();
+        let width = heatmap[0].len();
+        let successors = |c: &Crucible| {
+            c.clone()
+                .next_moves(min_moves, max_moves, width as u8, height as u8)
+                .map(|c| {
+                    let x = c.x as usize;
+                    let y = c.y as usize;
+                    (c, heatmap[y][x])
+                })
+        };
+        let success = |c: &Crucible| {
+            c.x == width as u8 - 1 && c.y == height as u8 - 1 && c.moves >= min_moves
+        };
+        let heuristic_map = {
+            let mut map = heatmap.clone();
+            for y in (0..height).rev() {
+                for x in (0..width).rev() {
+                    if x == width - 1 && y == height - 1 {
+                        continue;
+                    }
+                    let below = if y != height - 1 {
+                        heatmap[y + 1][x]
+                    } else {
+                        u32::MAX
+                    };
+                    let right = if x != width - 1 {
+                        heatmap[y][x + 1]
+                    } else {
+                        u32::MAX
+                    };
+                    map[y][x] += below.min(right);
+                }
+            }
+            map
+        };
+        let heuristic = |c: &Crucible| {
+            let x = c.x as usize;
+            let y = c.y as usize;
+            heuristic_map[y][x]
+        };
+        let res = pathfinding::directed::astar::astar(&start, &successors, &heuristic, success);
+        res.unwrap().1
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 struct Crucible {
     x: u8,
     y: u8,
@@ -66,7 +136,7 @@ impl Crucible {
         (self.x as u32)
             | (self.y as u32) << 8
             | (self.moves as u32) << 16
-            | self.direction.visited_state() << 24
+            | (self.direction as u32) << 24
     }
     fn move_forwards(mut self, width: u8, height: u8) -> Option<Self> {
         match self.direction {
@@ -80,6 +150,17 @@ impl Crucible {
         Some(self)
     }
     fn next_directions(self, min_moves: u8, max_moves: u8) -> impl Iterator<Item = Self> {
+        if self.moves == 0 {
+            let east = Self {
+                direction: Direction::East,
+                ..self
+            };
+            let south = Self {
+                direction: Direction::South,
+                ..self
+            };
+            return [Some(east), Some(south), None].into_iter().flatten();
+        }
         let left = (min_moves <= self.moves).then_some(self.turn_left());
         let right = (min_moves <= self.moves).then_some(self.turn_right());
         let straight = (self.moves < max_moves).then_some(self);
@@ -128,12 +209,12 @@ impl PartialOrd for Crucible {
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Hash)]
-enum Direction {
-    North,
+pub enum Direction {
+    North = 0,
     #[default]
-    East,
-    South,
-    West,
+    East = 1,
+    South = 2,
+    West = 3,
 }
 impl Direction {
     fn turn_right(self) -> Self {
@@ -150,12 +231,6 @@ impl Direction {
             Direction::East => Direction::North,
             Direction::South => Direction::East,
             Direction::West => Direction::South,
-        }
-    }
-    fn visited_state(self) -> u32 {
-        match self {
-            Direction::North | Direction::South => 0,
-            Direction::East | Direction::West => 1,
         }
     }
 }
@@ -188,11 +263,51 @@ mod tests {
 
     #[test]
     fn test_part1() {
-        Day::test_part1(102)
+        let input = Day::SAMPLE_PART1;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(102, dijkstra(&heatmap, 1, 3));
+
+        let input = Day::INPUT;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(861, dijkstra(&heatmap, 1, 3));
+        // Day::test_part1(102)
+    }
+
+    #[test]
+    fn pathfinding_dijkstra() {
+        let input = Day::SAMPLE_PART1;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(102, using_pathfinding::dijkstra(&heatmap, 1, 3));
+        assert_eq!(94, using_pathfinding::dijkstra(&heatmap, 4, 10));
+
+        let input = Day::INPUT;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(861, using_pathfinding::dijkstra(&heatmap, 1, 3));
+        assert_eq!(1037, using_pathfinding::dijkstra(&heatmap, 4, 10));
+    }
+
+    #[test]
+    fn pathfinding_astar() {
+        let input = Day::SAMPLE_PART1;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(102, using_pathfinding::astar(&heatmap, 1, 3));
+        assert_eq!(94, using_pathfinding::astar(&heatmap, 4, 10));
+
+        let input = Day::INPUT;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(861, using_pathfinding::astar(&heatmap, 1, 3));
+        assert_eq!(1037, using_pathfinding::astar(&heatmap, 4, 10));
     }
 
     #[test]
     fn test_part2() {
-        Day::test_part2(94)
+        let input = Day::SAMPLE_PART1;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(94, dijkstra(&heatmap, 4, 10));
+
+        let input = Day::INPUT;
+        let heatmap = parsers::heat_map(input);
+        assert_eq!(1037, dijkstra(&heatmap, 4, 10));
+        // Day::test_part2(94)
     }
 }

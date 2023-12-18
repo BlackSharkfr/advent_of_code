@@ -12,6 +12,7 @@ itertools = { workspace = true }
 rayon = { workspace = true }
 nom = { workspace = true }
 nom-supreme = { workspace = true }
+pathfinding = "4.6.0"
 
 [[bench]]
 name = "day17"
