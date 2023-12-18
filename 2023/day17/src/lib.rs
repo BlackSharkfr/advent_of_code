@@ -40,18 +40,13 @@ fn dijkstra(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
     let mut visited = HashSet::new();
     loop {
         let crucible = queue.pop().expect("Queue has run out of nodes");
-        if !visited.insert(crucible.visited_state()) {
-            continue;
-        }
         if (crucible.x, crucible.y) == end && crucible.moves >= min_moves {
             return crucible.total_heat_loss;
         }
-
-        let next_moves = crucible
-            .next_directions(min_moves, max_moves)
-            .map(|c| c.move_forwards(width, height))
-            .flatten();
-        for mut crucible in next_moves {
+        for mut crucible in crucible.next_moves(min_moves, max_moves, width, height) {
+            if !visited.insert(crucible.visited_state()) {
+                continue;
+            }
             crucible.total_heat_loss += heatmap[crucible.y as usize][crucible.x as usize] as u32;
             queue.push(crucible);
         }
@@ -62,11 +57,17 @@ fn dijkstra(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
 struct Crucible {
     x: u8,
     y: u8,
-    total_heat_loss: u32,
     direction: Direction,
     moves: u8,
+    total_heat_loss: u32,
 }
 impl Crucible {
+    fn visited_state(&self) -> u32 {
+        (self.x as u32)
+            | (self.y as u32) << 8
+            | (self.moves as u32) << 16
+            | self.direction.visited_state() << 24
+    }
     fn move_forwards(mut self, width: u8, height: u8) -> Option<Self> {
         match self.direction {
             Direction::North if self.y != 0 => self.y -= 1,
@@ -79,32 +80,40 @@ impl Crucible {
         Some(self)
     }
     fn next_directions(self, min_moves: u8, max_moves: u8) -> impl Iterator<Item = Self> {
-        let (left, right) = if min_moves <= self.moves {
-            (
-                Some(Self {
-                    direction: self.direction.turn_left(),
-                    moves: 0,
-                    ..self
-                }),
-                Some(Self {
-                    direction: self.direction.turn_right(),
-                    moves: 0,
-                    ..self
-                }),
-            )
-        } else {
-            (None, None)
-        };
-
+        let left = (min_moves <= self.moves).then_some(self.turn_left());
+        let right = (min_moves <= self.moves).then_some(self.turn_right());
         let straight = (self.moves < max_moves).then_some(self);
 
         [straight, left, right].into_iter().flatten()
     }
-    fn visited_state(&self) -> u32 {
-        (self.x as u32)
-            | (self.y as u32) << 8
-            | (self.moves as u32) << 16
-            | self.direction.visited_state() << 24
+    fn next_moves(
+        self,
+        min_moves: u8,
+        max_moves: u8,
+        width: u8,
+        height: u8,
+    ) -> impl Iterator<Item = Self> {
+        self.next_directions(min_moves, max_moves)
+            .map(move |c| c.move_forwards(width, height))
+            .flatten()
+    }
+    fn turn_left(&self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y,
+            direction: self.direction.turn_left(),
+            moves: 0,
+            total_heat_loss: self.total_heat_loss,
+        }
+    }
+    fn turn_right(&self) -> Self {
+        Self {
+            x: self.x,
+            y: self.y,
+            direction: self.direction.turn_right(),
+            moves: 0,
+            total_heat_loss: self.total_heat_loss,
+        }
     }
 }
 impl Ord for Crucible {
