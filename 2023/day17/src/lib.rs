@@ -27,33 +27,43 @@ fn dijkstra(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
     let width = heatmap[0].len() as u8;
     let end = (width - 1, height - 1);
 
-    let mut queue = BinaryHeap::from([Crucible::default()]);
+    let mut queue = BinaryHeap::from([HeapState(Crucible::default(), 0)]);
     let mut visited = HashSet::new();
     loop {
-        let crucible = queue.pop().expect("Queue has run out of nodes");
-        if !visited.insert(crucible.visited_state()) {
-            continue;
-        }
-        if (crucible.x, crucible.y) == end && crucible.moves >= min_moves {
-            return crucible.total_heat_loss;
-        }
-        for mut crucible in crucible.next_moves(min_moves, max_moves, width, height) {
-            crucible.total_heat_loss += heatmap[crucible.y as usize][crucible.x as usize] as u32;
-            queue.push(crucible);
+        let HeapState(crucible, heat) = queue.pop().expect("Queue has run out of nodes");
+        for crucible in crucible.next_moves(min_moves, max_moves, width, height) {
+            if !visited.insert(crucible.visited_state()) {
+                continue;
+            }
+            let heat = heat + (heatmap[crucible.y as usize][crucible.x as usize]);
+            if (crucible.x, crucible.y) == end && crucible.moves >= min_moves {
+                return heat;
+            }
+            queue.push(HeapState(crucible, heat));
         }
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct HeapState(Crucible, u32);
+impl PartialOrd for HeapState {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for HeapState {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.1.cmp(&other.1)).reverse()
+    }
+}
+
+/// For benchmark purposes, comparison with the [`pathfinding`] crate
 pub mod using_pathfinding {
 
-    use super::*;
     use crate::Crucible;
 
     pub fn dijkstra(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
-        let start = Crucible {
-            direction: Direction::East,
-            ..Default::default()
-        };
+        let start = Crucible::default();
         let height = heatmap.len();
         let width = heatmap[0].len();
         let successors = |c: &Crucible| {
@@ -68,15 +78,12 @@ pub mod using_pathfinding {
         let success = |c: &Crucible| {
             c.x == width as u8 - 1 && c.y == height as u8 - 1 && c.moves >= min_moves
         };
-        let res = pathfinding::directed::dijkstra::dijkstra(&start, &successors, success);
+        let res = pathfinding::directed::dijkstra::dijkstra(&start, successors, success);
         res.unwrap().1
     }
 
     pub fn astar(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
-        let start = Crucible {
-            direction: Direction::East,
-            ..Default::default()
-        };
+        let start = Crucible::default();
         let height = heatmap.len();
         let width = heatmap[0].len();
         let successors = |c: &Crucible| {
@@ -118,7 +125,7 @@ pub mod using_pathfinding {
             let y = c.y as usize;
             heuristic_map[y][x]
         };
-        let res = pathfinding::directed::astar::astar(&start, &successors, &heuristic, success);
+        let res = pathfinding::directed::astar::astar(&start, successors, heuristic, success);
         res.unwrap().1
     }
 }
@@ -129,8 +136,8 @@ struct Crucible {
     y: u8,
     direction: Direction,
     moves: u8,
-    total_heat_loss: u32,
 }
+
 impl Crucible {
     fn visited_state(&self) -> u32 {
         (self.x as u32)
@@ -175,8 +182,7 @@ impl Crucible {
         height: u8,
     ) -> impl Iterator<Item = Self> {
         self.next_directions(min_moves, max_moves)
-            .map(move |c| c.move_forwards(width, height))
-            .flatten()
+            .filter_map(move |c| c.move_forwards(width, height))
     }
     fn turn_left(&self) -> Self {
         Self {
@@ -184,7 +190,6 @@ impl Crucible {
             y: self.y,
             direction: self.direction.turn_left(),
             moves: 0,
-            total_heat_loss: self.total_heat_loss,
         }
     }
     fn turn_right(&self) -> Self {
@@ -193,18 +198,7 @@ impl Crucible {
             y: self.y,
             direction: self.direction.turn_right(),
             moves: 0,
-            total_heat_loss: self.total_heat_loss,
         }
-    }
-}
-impl Ord for Crucible {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.total_heat_loss.cmp(&self.total_heat_loss)
-    }
-}
-impl PartialOrd for Crucible {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
     }
 }
 
@@ -301,7 +295,7 @@ mod tests {
 
     #[test]
     fn test_part2() {
-        let input = Day::SAMPLE_PART1;
+        let input = Day::SAMPLE_PART2;
         let heatmap = parsers::heat_map(input);
         assert_eq!(94, dijkstra(&heatmap, 4, 10));
 
