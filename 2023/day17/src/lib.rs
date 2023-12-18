@@ -22,9 +22,11 @@ impl Aoc for Day {
     }
 }
 
-fn dijkstra(heatmap: &Vec<Vec<u8>>, min_moves: u8, max_moves: u8) -> u32 {
-    let height = heatmap.len();
-    let width = heatmap[0].len();
+fn dijkstra(heatmap: &Vec<Vec<u32>>, min_moves: u8, max_moves: u8) -> u32 {
+    let height = heatmap.len() as u8;
+    let width = heatmap[0].len() as u8;
+    let end = (width - 1, height - 1);
+
     let start_right = Crucible {
         direction: Direction::East,
         ..Default::default()
@@ -33,15 +35,16 @@ fn dijkstra(heatmap: &Vec<Vec<u8>>, min_moves: u8, max_moves: u8) -> u32 {
         direction: Direction::South,
         ..Default::default()
     };
+
     let mut queue = BinaryHeap::from([(start_right), (start_down)]);
     let mut visited = HashSet::new();
     loop {
-        let crucible = queue.pop().expect("Queue is empty");
-        if crucible.x == width - 1 && crucible.y == height - 1 && crucible.moves >= min_moves {
-            return crucible.total_heat_loss;
-        }
-        if !visited.insert(crucible.state()) {
+        let crucible = queue.pop().expect("Queue has run out of nodes");
+        if !visited.insert(crucible.visited_state()) {
             continue;
+        }
+        if (crucible.x, crucible.y) == end && crucible.moves >= min_moves {
+            return crucible.total_heat_loss;
         }
 
         let next_moves = crucible
@@ -49,7 +52,7 @@ fn dijkstra(heatmap: &Vec<Vec<u8>>, min_moves: u8, max_moves: u8) -> u32 {
             .map(|c| c.move_forwards(width, height))
             .flatten();
         for mut crucible in next_moves {
-            crucible.total_heat_loss += heatmap[crucible.y][crucible.x] as u32;
+            crucible.total_heat_loss += heatmap[crucible.y as usize][crucible.x as usize] as u32;
             queue.push(crucible);
         }
     }
@@ -57,43 +60,51 @@ fn dijkstra(heatmap: &Vec<Vec<u8>>, min_moves: u8, max_moves: u8) -> u32 {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct Crucible {
-    x: usize,
-    y: usize,
+    x: u8,
+    y: u8,
     total_heat_loss: u32,
     direction: Direction,
     moves: u8,
 }
 impl Crucible {
-    pub fn move_forwards(mut self, width: usize, height: usize) -> Option<Self> {
+    fn move_forwards(mut self, width: u8, height: u8) -> Option<Self> {
         match self.direction {
-            Direction::North => self.y = self.y.checked_sub(1)?,
+            Direction::North if self.y != 0 => self.y -= 1,
             Direction::East if self.x != width - 1 => self.x += 1,
             Direction::South if self.y != height - 1 => self.y += 1,
-            Direction::West => self.x = self.x.checked_sub(1)?,
+            Direction::West if self.x != 0 => self.x -= 1,
             _ => return None,
         };
         self.moves += 1;
         Some(self)
     }
-    pub fn next_directions(self, min_moves: u8, max_moves: u8) -> impl Iterator<Item = Self> {
-        let left = (min_moves <= self.moves).then_some(Self {
-            direction: self.direction.turn_left(),
-            moves: 0,
-            ..self
-        });
-
-        let right = (min_moves <= self.moves).then_some(Self {
-            direction: self.direction.turn_right(),
-            moves: 0,
-            ..self
-        });
+    fn next_directions(self, min_moves: u8, max_moves: u8) -> impl Iterator<Item = Self> {
+        let (left, right) = if min_moves <= self.moves {
+            (
+                Some(Self {
+                    direction: self.direction.turn_left(),
+                    moves: 0,
+                    ..self
+                }),
+                Some(Self {
+                    direction: self.direction.turn_right(),
+                    moves: 0,
+                    ..self
+                }),
+            )
+        } else {
+            (None, None)
+        };
 
         let straight = (self.moves < max_moves).then_some(self);
 
         [straight, left, right].into_iter().flatten()
     }
-    fn state(&self) -> (usize, usize, Direction, u8) {
-        (self.x, self.y, self.direction, self.moves)
+    fn visited_state(&self) -> u32 {
+        (self.x as u32)
+            | (self.y as u32) << 8
+            | (self.moves as u32) << 16
+            | self.direction.visited_state() << 24
     }
 }
 impl Ord for Crucible {
@@ -132,15 +143,21 @@ impl Direction {
             Direction::West => Direction::South,
         }
     }
+    fn visited_state(self) -> u32 {
+        match self {
+            Direction::North | Direction::South => 0,
+            Direction::East | Direction::West => 1,
+        }
+    }
 }
 
 pub mod parsers {
-    pub fn heat_map(input: &str) -> Vec<Vec<u8>> {
+    pub fn heat_map(input: &str) -> Vec<Vec<u32>> {
         let mut heatmap = Vec::new();
         let mut line = Vec::new();
         for c in input.chars() {
             match c.to_digit(10) {
-                Some(n) => line.push(n as u8),
+                Some(n) => line.push(n),
                 None => {
                     if !line.is_empty() {
                         heatmap.push(line);
