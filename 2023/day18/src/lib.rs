@@ -4,7 +4,7 @@ use itertools::Itertools;
 pub struct Day;
 
 impl Aoc for Day {
-    type OUTPUT = u32;
+    type OUTPUT = u64;
     const DAY_NUMBER: u8 = 18;
     const INPUT: &'static str = include_str!("../inputs/input.txt");
     const SAMPLE_PART1: &'static str = include_str!("../inputs/sample1.txt");
@@ -16,16 +16,12 @@ impl Aoc for Day {
         let (mut x, mut y) = (0, 0);
         let (mut xmin, mut xmax, mut ymin, mut ymax) = (0, 0, 0, 0);
         for edge in &edges {
-            (x, y) = edge.direction.next_coordinates((x, y), edge.amount as i32);
+            (x, y) = edge.direction.next_coordinates((x, y), edge.amount as i64);
             xmin = xmin.min(x);
             xmax = xmax.max(x);
             ymin = ymin.min(y);
             ymax = ymax.max(y);
         }
-        println!(
-            "Final coordinates : ({},{}), x range : [{},{}], y range : [{},{}]",
-            x, y, xmin, xmax, ymin, ymax
-        );
 
         let width = xmax - xmin;
         let height = ymax - ymin;
@@ -66,8 +62,25 @@ impl Aoc for Day {
         count
     }
 
-    fn part2(_input: &str) -> Self::OUTPUT {
-        todo!()
+    fn part2(input: &str) -> Self::OUTPUT {
+        let edges = parsers::part2(input);
+
+        let (mut x, mut y) = (0, 0);
+        let coords = std::iter::once((0, 0))
+            .chain(edges.iter().map(|edge| {
+                (x, y) = edge.direction.next_coordinates((x, y), edge.amount as i64);
+                (x, y)
+            }))
+            .collect::<Vec<_>>();
+
+        let area = coords
+            .iter()
+            .circular_tuple_windows()
+            .map(|((x1, y1), (x2, y2))| (y1 + y2) * (x1 - x2))
+            .sum::<i64>()
+            / 2;
+        let perimeter = edges.iter().map(|edge| edge.amount).sum::<u32>();
+        area.unsigned_abs() + (perimeter as u64 / 2) + 1
     }
 }
 
@@ -91,22 +104,29 @@ impl TryFrom<char> for Direction {
     }
 }
 impl Direction {
-    fn next_coordinates(self, (x, y): (i32, i32), amount: i32) -> (i32, i32) {
+    fn next_coordinates(self, (x, y): (i64, i64), amount: i64) -> (i64, i64) {
         match self {
-            Direction::Up => (x, y - amount as i32),
-            Direction::Down => (x, y + amount as i32),
-            Direction::Left => (x - amount as i32, y),
-            Direction::Right => (x + amount as i32, y),
+            Direction::Up => (x, y - amount),
+            Direction::Down => (x, y + amount),
+            Direction::Left => (x - amount, y),
+            Direction::Right => (x + amount, y),
+        }
+    }
+
+    fn from_digit_part2(value: &str) -> Result<Self, ()> {
+        match value {
+            "0" => Ok(Direction::Right),
+            "1" => Ok(Direction::Down),
+            "2" => Ok(Direction::Left),
+            "3" => Ok(Direction::Up),
+            _ => Err(()),
         }
     }
 }
 
-struct Color(String);
-
 struct Edge {
     direction: Direction,
-    amount: u8,
-    color: Color,
+    amount: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -149,8 +169,8 @@ impl From<(Direction, Direction)> for Dig {
 
 mod parsers {
     use nom::{
-        bytes::complete::tag,
-        character::complete::{alphanumeric1, anychar, line_ending, space1, u8},
+        bytes::complete::{tag, take, take_until, take_until1},
+        character::complete::{anychar, line_ending, space1, u32},
         multi::separated_list1,
         IResult, Parser,
     };
@@ -162,31 +182,37 @@ mod parsers {
         anychar.map_res(Direction::try_from).parse(input)
     }
 
-    fn color(input: &str) -> IResult<&str, Color> {
-        let (input, _) = tag("(#")(input)?;
-        let (input, color) = alphanumeric1(input)?;
+    fn edge_part2(input: &str) -> IResult<&str, Edge> {
+        let (input, _) = take_until1("#")(input)?;
+        let (input, _) = tag("#")(input)?;
+        let (input, amount) = take(5_usize)
+            .map_res(|s| u32::from_str_radix(s, 16))
+            .parse(input)?;
+        let (input, direction) = take(1_usize)
+            .map_res(|s| Direction::from_digit_part2(s))
+            .parse(input)?;
         let (input, _) = tag(")")(input)?;
 
-        Ok((input, Color(color.to_string())))
+        let edge = Edge { direction, amount };
+        Ok((input, edge))
     }
 
-    pub fn edge(input: &str) -> IResult<&str, Edge> {
+    pub fn edge_part1(input: &str) -> IResult<&str, Edge> {
         let (input, direction) = direction(input)?;
         let (input, _) = space1(input)?;
-        let (input, amount) = u8(input)?;
-        let (input, _) = space1(input)?;
-        let (input, color) = color(input)?;
+        let (input, amount) = u32(input)?;
+        let (input, _) = take_until("\n")(input)?;
 
-        let edge = Edge {
-            direction,
-            amount,
-            color,
-        };
+        let edge = Edge { direction, amount };
         Ok((input, edge))
     }
 
     pub fn part1(input: &str) -> Vec<Edge> {
-        separated_list1(line_ending, edge)(input).unwrap().1
+        separated_list1(line_ending, edge_part1)(input).unwrap().1
+    }
+
+    pub fn part2(input: &str) -> Vec<Edge> {
+        separated_list1(line_ending, edge_part2)(input).unwrap().1
     }
 }
 
@@ -201,6 +227,6 @@ mod tests {
 
     #[test]
     fn test_part2() {
-        Day::test_part2(0)
+        Day::test_part2(952408144115)
     }
 }
