@@ -1,11 +1,11 @@
-use std::str::FromStr;
+use std::{ops::Range, str::FromStr};
 
 use aoc::Aoc;
 
 pub struct Day;
 
 impl Aoc for Day {
-    type OUTPUT = u32;
+    type OUTPUT = u64;
     const DAY_NUMBER: u8 = 19;
     const INPUT: &'static str = include_str!("../inputs/input.txt");
     const SAMPLE_PART1: &'static str = include_str!("../inputs/sample1.txt");
@@ -34,8 +34,29 @@ impl Aoc for Day {
         total
     }
 
-    fn part2(_input: &str) -> Self::OUTPUT {
-        todo!()
+    fn part2(input: &str) -> Self::OUTPUT {
+        let (workflows, _) = parsers::part1(input).unwrap().1;
+        let mut ranges = vec![("in".to_string(), PieceRange::default())];
+        let mut count = 0;
+        while let Some((name, mut range)) = ranges.pop() {
+            match name.as_str() {
+                "R" => continue,
+                "A" => {
+                    count += range.count();
+                    continue;
+                }
+                _ => (),
+            }
+            let workflow = workflows.get(&name).unwrap();
+            for (condition, next) in &workflow.conditions {
+                if let Some(new_range) = range.split_condition(condition) {
+                    ranges.push((next.clone(), new_range));
+                }
+            }
+            ranges.push((workflow.default.clone(), range));
+        }
+
+        count as u64
     }
 }
 
@@ -46,17 +67,78 @@ struct Piece {
     s: u16,
 }
 
+#[derive(Debug, Clone)]
+struct PieceRange {
+    x: Range<u16>,
+    m: Range<u16>,
+    a: Range<u16>,
+    s: Range<u16>,
+}
+impl Default for PieceRange {
+    fn default() -> Self {
+        Self {
+            x: 1..4001,
+            m: 1..4001,
+            a: 1..4001,
+            s: 1..4001,
+        }
+    }
+}
+impl PieceRange {
+    fn split_condition(&mut self, condition: &Condition) -> Option<Self> {
+        let mut new = self.clone();
+        let (range, new_range) = match condition.xmas {
+            Xmas::X => (&mut self.x, &mut new.x),
+            Xmas::M => (&mut self.m, &mut new.m),
+            Xmas::A => (&mut self.a, &mut new.a),
+            Xmas::S => (&mut self.s, &mut new.s),
+        };
+        match condition.ord {
+            GreaterOrLesser::Greater => {
+                if range.end <= condition.value {
+                    return None;
+                }
+                if range.start <= condition.value {
+                    range.end = condition.value + 1;
+                    new_range.start = condition.value + 1;
+                } else {
+                    range.end = range.start;
+                }
+                Some(new)
+            }
+            GreaterOrLesser::Lesser => {
+                if range.start >= condition.value {
+                    return None;
+                }
+                if range.end >= condition.value {
+                    range.start = condition.value;
+                    new_range.end = condition.value;
+                } else {
+                    range.end = range.start;
+                }
+                Some(new)
+            }
+        }
+    }
+
+    fn count(&self) -> usize {
+        self.x.len() * self.m.len() * self.a.len() * self.s.len()
+    }
+}
+
 struct WorkFlow {
     conditions: Vec<(Condition, String)>,
     default: String,
 }
 
+#[derive(Debug)]
 struct Condition {
     xmas: Xmas,
     ord: GreaterOrLesser,
     value: u16,
 }
 
+#[derive(Debug)]
 enum Xmas {
     X,
     M,
@@ -76,6 +158,7 @@ impl FromStr for Xmas {
     }
 }
 
+#[derive(Debug)]
 enum GreaterOrLesser {
     Greater,
     Lesser,
@@ -116,8 +199,8 @@ impl Piece {
         }
     }
 
-    fn value(&self) -> u32 {
-        self.x as u32 + self.m as u32 + self.a as u32 + self.s as u32
+    fn value(&self) -> u64 {
+        self.x as u64 + self.m as u64 + self.a as u64 + self.s as u64
     }
 }
 
@@ -214,6 +297,6 @@ mod tests {
 
     #[test]
     fn test_part2() {
-        Day::test_part2(0)
+        Day::test_part2(167409079868000)
     }
 }
