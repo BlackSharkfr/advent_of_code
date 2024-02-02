@@ -256,7 +256,7 @@ fn loop_length_encoded(start_id: u16, directions: &[Direction], nodes: &[[u16; 2
     unreachable!("Loop should return directly");
 }
 
-fn lcm(a: u64, b: u64) -> u64 {
+pub fn lcm(a: u64, b: u64) -> u64 {
     (a / gcd(a, b)) * b
 }
 

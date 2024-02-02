@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use aoc::Aoc;
+use day08::lcm;
 
 pub struct Day;
 
@@ -72,20 +73,6 @@ impl Aoc for Day {
             .collect::<Vec<_>>();
         numbers.into_iter().reduce(lcm).unwrap()
     }
-}
-
-fn lcm(a: u64, b: u64) -> u64 {
-    (a / gcd(a, b)) * b
-}
-
-/// Euclid division method [https://en.wikipedia.org/wiki/Euclidean_algorithm#Implementations]
-fn gcd(mut a: u64, mut b: u64) -> u64 {
-    while b != 0 {
-        let t = b;
-        b = a % b;
-        a = t;
-    }
-    a
 }
 
 struct Button {}

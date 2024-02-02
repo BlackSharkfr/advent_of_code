@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 aoc = { workspace = true }
+day08 = { path = "../day08" }
 divan = { workspace = true }
 itertools = { workspace = true }
 rayon = { workspace = true }

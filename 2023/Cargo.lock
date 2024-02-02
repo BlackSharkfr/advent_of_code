@@ -355,6 +355,7 @@ name = "day20"
 version = "0.1.0"
 dependencies = [
  "aoc",
+ "day08",
  "divan",
  "itertools",
  "nom",
